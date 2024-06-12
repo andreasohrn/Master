@@ -1,1 +1,0 @@
-hei pa deg
