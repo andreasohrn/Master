@@ -1,0 +1,637 @@
+---
+title: "Resultater"
+format: html
+---
+
+```{r}
+##Loading necessary items
+
+#| echo: false
+#| warning: false
+library(repeatData)
+library(readxl)
+library(tidyverse)
+library(gt)
+library(lme4)
+library(irr)
+
+data(final.data)
+data("cycling.data")
+```
+
+```{r}
+#### baseline values
+
+##Descriptive data from baseline 1 (Pre 1)
+
+base1 <- final.data %>% 
+select(id, timepoint, test, period, sex, weight, height, age, vo2.kg, rel.vo2, vo2, watt) %>% 
+  filter(period == 1, test == "max", timepoint == "pre", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  mutate(bmi = weight/(height/100)^2) %>% 
+  group_by() %>% 
+ summarise( Weight = paste(round(mean(weight, na.rm = TRUE),2), 
+                        round(sd(weight, na.rm = TRUE),2), 
+                        sep = " ± "),
+           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
+                        round(sd(vo2.kg, na.rm = TRUE),2), 
+                        sep = " ± "),
+           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
+                        round(sd(vo2, na.rm = TRUE),2), 
+                        sep = " ± "),
+           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
+                        round(sd(watt, na.rm = TRUE),2), 
+                        sep = " ± ")) %>% 
+  pivot_longer(names_to = "variables",
+               values_to = "values",
+               cols = Weight:Wmax)
+##descriptive data from Baseline 2 (Pre 2)
+
+base1_2 <- final.data %>% 
+select(id, timepoint, test, period, sex, weight, vo2.kg, rel.vo2, vo2, watt) %>% 
+  filter(period == 2, test == "max", timepoint == "pre", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  group_by() %>% 
+ summarise(Weight = paste(round(mean(weight, na.rm = TRUE),2), 
+                        round(sd(weight, na.rm = TRUE),2), 
+                        sep = " ± "),
+           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
+                        round(sd(vo2.kg, na.rm = TRUE),2), 
+                        sep = " ± "),
+           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
+                        round(sd(vo2, na.rm = TRUE),2), 
+                        sep = " ± "),
+           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
+                        round(sd(watt, na.rm = TRUE),2), 
+                        sep = " ± ")) %>% 
+  pivot_longer(names_to = "variables",
+               values_to = "values",
+               cols = Weight:Wmax)
+  
+merge <- base1 %>% 
+right_join(base1_2, base1, 
+               by = c("variables")) %>% 
+mutate(
+    variables = case_when(
+      variables == "rel.VO2max" ~ "VO2max (ml/kg/min)",
+      variables == "Weight" ~ "Body weight (kg)",
+      variables == "VO2max" ~ "VO2max (ml/min)",
+       variables == "Wmax" ~ "Wmax (watt)",
+      TRUE ~ variables))
+
+base.per1 <- final.data %>% 
+ select(id, timepoint, test, period, watt) %>% 
+  filter(period %in% c(1), test == "per", timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  group_by() %>% 
+  summarise(
+    variables = "W15min (watt)",
+    values = paste(round(mean(watt, na.rm = TRUE), 2), 
+                   round(sd(watt, na.rm = TRUE), 2), 
+                   sep = " ± ")) %>% 
+print()
+
+
+base.per2 <- final.data %>% 
+ select(id, timepoint, test, period, watt) %>% 
+  filter(period %in% c(2), test == "per", timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  group_by() %>% 
+  summarise(
+    variables = "W15min (watt)",
+    values = paste(round(mean(watt, na.rm = TRUE), 2), 
+                   round(sd(watt, na.rm = TRUE), 2), 
+                   sep = " ± "))
+  merge.per <- base.per1 %>% 
+right_join(base.per2, base.per1, 
+               by = c("variables")) %>% 
+  print()
+
+  
+final.base <- rbind(merge, merge.per) %>% 
+print()
+
+gt(final.base) %>% 
+cols_label(variables = "Variables",
+           values.x = "Period 1",
+           values.y = "period 2") %>% 
+  tab_header(title = "Baseline Characteristics")
+```
+
+
+
+
+##mixed models (on change score) and ICC caluculations of the differet variables:
+
+
+##VO2max (ml/min)
+
+```{r}
+## Model a LMM that i can use to calculate ICC
+
+lmm_vo2 <- final.data %>% 
+select(id, period, timepoint, test, vo2) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>% 
+  pivot_wider(names_from = timepoint, values_from = vo2) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+#Build to Model
+   
+  model.vo2 <- lmer(change ~ period + (1 | id), data = lmm_vo2)
+  summary(model.vo2)
+  
+  ## Create a function that i can use to calculate ICC from the model above
+## ICC
+  icc_fun <- function(x) {
+    
+    data.frame(VarCorr(x))[1,4] / sum(data.frame(VarCorr(x))[,4])
+    
+    }
+
+##Calculate the ICC from the function above.
+  
+icc_fun(model.vo2)
+
+## Calculate confident intervall from the ICC
+
+bo.vo2 <- bootMer(model.vo2, icc_fun, nsim = 1000)
+
+ci.icc.vo2 <- quantile(bo.vo2$t, c(0.025, 0.975))
+ci_lower.vo2 <- round(ci.icc.vo2[1], 2)
+ci_upper.vo2 <- round(ci.icc.vo2[2], 2)
+
+## make a dataframe with ICC
+
+icc_value.vo2 <- icc_fun(model.vo2)
+
+## calculate pearsons r
+
+pearson_r.vo2 <- cor(plot_data.vo2$period_1, plot_data.vo2$period_2)
+
+## Calculate different measures of reliability
+
+
+cv.vo2 <- final.data %>% 
+  select(id, period, timepoint, test, vo2) %>% 
+  filter(test == "max",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% 3) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2, names_prefix = "timepoint_") %>% 
+  mutate(diff = timepoint_post - timepoint_pre) %>% 
+  select(id, period, diff) %>% 
+  pivot_wider(names_from = period, values_from = diff, names_prefix = "period_") %>% 
+  mutate(diff = period_2 - period_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(period_1, period_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+
+
+
+## wrangle to make a plot
+plot_data.vo2 <- lmm_vo2 %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_")
+
+
+
+# Create scatter plot with slope line
+ggplot(plot_data.vo2, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "red") +
+  labs(x = "Change in Period 1", y = "Change in Period 2", title = "Change in Period 1 vs. Period 2 with Regression Line") +
+  annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2), label = paste("ICC =", round(icc_value.vo2, 2),"[", ci_lower.vo2, "-", ci_upper.vo2, "]"), hjust = 0, vjust = 1) +
+   annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2) - 75, label = paste("r =", round(pearson_r.vo2, 2)), hjust = 0, vjust = 1) +
+  annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2) - 150, label = paste("CV =", round(cv.vo2$cv, 2)), hjust = 0, vjust = 1) +
+  theme_minimal()
+
+
+```
+
+
+
+
+```{r}
+lmm_wmax <- final.data %>% 
+select(id, period, timepoint, test, watt) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.wmax <- lmer(change ~ period + (1 | id), data = lmm_wmax)
+  summary(model.wmax)
+  
+icc_fun(model.wmax)
+
+## Calculate confident intervall from the ICC
+
+bo.wmax <- bootMer(model.wmax, icc_fun, nsim = 1000)
+
+quantile(bo.wmax$t, c(0.025, 0.975))
+```
+
+## W15min
+
+```{r}
+lmm_w15 <- final.data %>% 
+select(id, period, timepoint, test, watt) %>% 
+  filter(test == "per", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.w15 <- lmer(change ~ period + (1 | id), data = lmm_w15)
+  summary(model.w15)
+  
+icc_fun(model.w15)
+
+## Calculate confident intervall from the ICC
+
+bo.w15 <- bootMer(model.w15, icc_fun, nsim = 1000)
+
+quantile(bo.w15$t, c(0.025, 0.975))
+```
+
+
+## VO2(ml/kg/min)
+
+
+```{r}
+lmm_vo2kg <- final.data %>% 
+select(id, period, timepoint, test, vo2.kg) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>% 
+  pivot_wider(names_from = timepoint, values_from = vo2.kg) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.vo2kg <- lmer(change ~ period + (1 | id), data = lmm_vo2kg)
+  summary(model.vo2kg)
+  
+icc_fun(model.vo2kg)
+
+## Calculate confident intervall from the ICC
+
+bo.vo2kg <- bootMer(model.vo2kg, icc_fun, nsim = 1000)
+
+quantile(bo.vo2kg$t, c(0.025, 0.975))
+```
+
+## kroppsvekt
+
+```{r}
+lmm_weight <- final.data %>% 
+select(id, period, timepoint, test, weight) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>% 
+  pivot_wider(names_from = timepoint, values_from = weight) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.weight <- lmer(change ~ period + (1 | id), data = lmm_weight)
+  summary(model.weight)
+  
+icc_fun(model.weight)
+
+## Calculate confident intervall from the ICC
+
+bo.weight <- bootMer(model.weight, icc_fun, nsim = 1000)
+
+quantile(bo.weight$t, c(0.025, 0.975))
+```
+
+
+
+
+
+##Baseline tests with LMM and ICC
+## Baseline W15min
+```{r}
+baseline_w15 <- final.data %>% 
+select(id, period, timepoint, test, watt) %>% 
+  filter(test == "per", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basew15 <- lmer(watt ~ period + (1 | id), data = baseline_w15)
+  summary(model.basew15)
+  
+##Calculate the ICC from the function above.
+  
+icc_fun(model.basew15)
+
+## Calculate confident intervall from the ICC
+
+bo.basew15 <- bootMer(model.basew15, icc_fun, nsim = 1000)
+
+quantile(bo.basew15$t, c(0.025, 0.975))
+
+```
+
+### Baseline VO2(ml/min)
+```{r}
+baseline_vo2 <- final.data %>% 
+select(id, period, timepoint, test, vo2) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2) %>% 
+  rename(vo2 = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basevo2 <- lmer(vo2 ~ period + (1 | id), data = baseline_vo2)
+  summary(model.basevo2)
+  
+##Calculate the ICC from the function above.
+  
+icc_fun(model.basevo2)
+
+## Calculate confident intervall from the ICC
+
+bo.basevo2 <- bootMer(model.basevo2, icc_fun, nsim = 1000)
+
+quantile(bo.basevo2$t, c(0.025, 0.975))
+
+
+
+
+df.vo2.plot <- baseline_vo2 %>%
+  filter(period %in% c(1, 2)) %>%
+  spread(key = period, value = vo2) %>%
+  rename(Pre1 = '1', Pre2 = '2')
+
+
+icc_value.vo2.b <- icc_fun(model.basevo2)
+
+pearson_r.vo2.b <- cor(df.vo2.plot$Pre1, df.vo2.plot$Pre2)
+
+
+  
+  ggplot(df.vo2.plot, aes(x = Pre1, y = Pre2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Pre1", y = "Pre2", title = "Pre1 vs Pre2 with Linear Regression Line") +
+     annotate("text", x = min(df.vo2.plot$Pre1), y = max(df.vo2.plot$Pre2) - 500, 
+              label = paste("ICC =", round(icc_value.vo2.b, 2)), hjust = 0, vjust = 1) +
+     annotate("text", x = min(df.vo2.plot$Pre1), y = max(df.vo2.plot$Pre2)  - 250, 
+              label = paste("Pearson's r =", round(pearson_r.vo2.b, 2)), hjust = 0, vjust = 1) +
+     theme_minimal()
+```
+
+
+
+##Baseline VO2/kg
+
+```{r}
+baseline_vo2kg <- final.data %>% 
+select(id, period, timepoint, test, vo2.kg) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2.kg) %>% 
+  rename(vo2.kg = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basevo2kg <- lmer(vo2.kg ~ period + (1 | id), data = baseline_vo2kg)
+  summary(model.basevo2kg)
+ ci.base.vo2kg <- confint(model.basevo2kg, level = 0.95)
+  print(ci.base.vo2kg)
+  
+##Calculate the ICC from the function above.
+  
+icc_fun(model.basevo2kg)
+
+## Calculate confident intervall from the ICC
+
+bo.basevo2kg <- bootMer(model.basevo2kg, icc_fun, nsim = 1000)
+
+quantile(bo.basevo2kg$t, c(0.025, 0.975))
+```
+
+##wmax Baseline
+
+```{r}
+baseline_wmax <- final.data %>% 
+select(id, period, timepoint, test, watt) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basewmax <- lmer(watt ~ period + (1 | id), data = baseline_wmax)
+  summary(model.basewmax)
+  
+##Calculate the ICC from the function above.
+  
+icc_fun(model.basewmax)
+
+## Calculate confident intervall from the ICC
+
+bo.basewmax <- bootMer(model.basewmax, icc_fun, nsim = 1000)
+
+quantile(bo.basewmax$t, c(0.025, 0.975))
+```
+
+
+
+
+
+
+``
+
+
+
+
+
+## Compare session-data between period 1 and 2
+```{r}
+
+session <- session.data %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type == c("4x5", "4x8", "6x6")) %>%
+  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
+  summarise(
+   ftp_1_mean = round(mean(ftp_1, na.rm = TRUE)),
+  hr_1_mean = round(mean(hr_1, na.rm = TRUE)),
+  watt_1_mean = round(mean(watt_1, na.rm = TRUE)),
+  rpe_1_mean = round(mean(rpe_1, na.rm = TRUE)),
+  ftp_2_mean = round(mean(ftp_2, na.rm = TRUE)),
+  hr_2_mean = round(mean(hr_2, na.rm = TRUE)),
+  watt_2_mean = round(mean(watt_2, na.rm = TRUE)),
+  rpe_2_mean = round(mean(rpe_2, na.rm = TRUE))) %>%
+  pivot_longer(
+    cols = starts_with("ftp_1_"):starts_with("rpe_2_"),
+    names_to = c(".value", "period"),
+    names_sep = "_") %>%
+pivot_longer(names_to = "variables", values_to = "values", cols = ftp:rpe) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "period_") %>% 
+  print()
+
+
+session.type <- session.data %>% 
+  select(id, period, session.n, type) %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  group_by(period, type) %>%
+  summarize(count = n(), .groups = 'drop') %>%
+  filter(!is.na(type)) %>% 
+  pivot_wider(names_from = period, values_from = count, names_prefix = "period_") %>% 
+ mutate(
+    mean_n_p1 = round(period_1 / 42),
+    mean_n_p2 = round(period_2 / 42)) %>% 
+  select(type, mean_n_p1, mean_n_p2) %>% 
+  print()
+
+
+```
+
+
+
+## Compare session-data between period 1 and 2
+```{r}
+session <- session.data %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type == c("4x5", "4x8", "6x6")) %>%
+  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
+  summarise(
+   ftp_1_mean = round(mean(ftp_1, na.rm = TRUE)),
+  hr_1_mean = round(mean(hr_1, na.rm = TRUE)),
+  watt_1_mean = round(mean(watt_1, na.rm = TRUE)),
+  rpe_1_mean = round(mean(rpe_1, na.rm = TRUE)),
+  ftp_2_mean = round(mean(ftp_2, na.rm = TRUE)),
+  hr_2_mean = round(mean(hr_2, na.rm = TRUE)),
+  watt_2_mean = round(mean(watt_2, na.rm = TRUE)),
+  rpe_2_mean = round(mean(rpe_2, na.rm = TRUE))) %>%
+  pivot_longer(
+    cols = starts_with("ftp_1_"):starts_with("rpe_2_"),
+    names_to = c(".value", "period"),
+    names_sep = "_") %>%
+pivot_longer(names_to = "variables", values_to = "values", cols = ftp:rpe) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "period_") %>% 
+  print()
+
+
+
+```
+
+##mean sessions trained per workout. 
+
+```{r}
+session.type <- session.data %>% 
+  select(id, period, session.n, type) %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  group_by(period, type) %>%
+  summarize(count = n(), .groups = 'drop') %>%
+  filter(!is.na(type)) %>% 
+  pivot_wider(names_from = period, values_from = count, names_prefix = "period_") %>% 
+ mutate(
+    mean_n_p1 = round(period_1 / 42),
+    mean_n_p2 = round(period_2 / 42)) %>% 
+  select(type, mean_n_p1, mean_n_p2) %>% 
+  print()
+```
+
+
+
+
+
+### gjennomsnittswatt på alle øktene
+```{r}
+session.test.watt <- session.data %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type == c("4x5", "4x8", "6x6")) %>%
+  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
+  group_by(id) %>% 
+  summarize(mean_watt_1 = mean(watt_1, na.rm=T),
+            mean_watt_2 = mean(watt_2, na.rm=T)) %>%
+  pivot_longer(cols = starts_with("mean_watt"),
+               names_to = "test",
+               values_to = "watt") %>%
+  mutate(period = if_else(test == "mean_watt_1", "1", "2")) %>%
+  select(id, period, test, watt) %>% 
+  print()
+
+##different models 
+
+  model.sess.watt <- lmer(watt ~ period + (1 | id), data = session.test.watt)
+  summary(model.sess.watt) 
+    
+  confint(model.sess.watt)
+  
+  icc_fun(model.sess.watt)
+
+## Calculate confident intervall from the ICC
+
+bo.sess.watt <- bootMer(model.sess.watt, icc_fun, nsim = 1000)
+
+quantile(bo.sess.watt$t, c(0.025, 0.975))
+
+```
+
+## Mean HR on all sessions
+```{r}
+session.test.hr <- session.data %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type == c("4x5", "4x8", "6x6")) %>%
+  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
+  group_by(id) %>% 
+  summarize(mean_hr_1 = mean(hr_1, na.rm=T),
+            mean_hr_2 = mean(hr_2, na.rm=T)) %>%
+  pivot_longer(cols = starts_with("mean_hr"),
+               names_to = "test",
+               values_to = "hr") %>%
+  mutate(period = if_else(test == "mean_hr_1", "1", "2")) %>%
+  select(id, period, test, hr) %>% 
+  print()
+  model.sess.hr <- lmer(hr ~ period + (1 | id), data = session.test.hr)
+  summary(model.sess.hr) 
+    
+  confint(model.sess.hr)
+  
+  icc_fun(model.sess.hr)
+
+## Calculate confident intervall from the ICC
+
+bo.sess.hr <- bootMer(model.sess.hr, icc_fun, nsim = 1000)
+
+quantile(bo.sess.hr$t, c(0.025, 0.975))
+```
+
+
