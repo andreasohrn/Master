@@ -1,0 +1,565 @@
+---
+title: "Tabeller"
+format: pdf
+#| echo: false
+#| warning: false
+linestretch: 1.5
+---
+
+
+
+
+```{r}
+#| echo: false
+#| warning: false
+
+library(repeatData)
+library(readxl)
+library(tidyverse)
+library(gt)
+library(lme4)
+library(irr)
+library(cowplot)
+library(psych)
+library(ggplot2)
+library(webshot2)
+
+data(final.data)
+data(cycling.data)
+```
+
+
+## Descriptives of participants Pre-intervention
+```{r}
+#| echo: false
+#| warning: false
+
+
+descript <- final.data %>% 
+select(id, timepoint, test, period, group, sex, weight, height, age, vo2.kg, rel.vo2, vo2, watt) %>% 
+  filter(period == 1, test == "max", timepoint == "pre", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% c("control")) %>% 
+  mutate(bmi = weight/(height/100)^2) %>% 
+  group_by() %>% 
+  summarise(N = n(), 
+            Age = paste(round(mean(age, na.rm = TRUE),2), 
+                        round(sd(age, na.rm = TRUE),2), 
+                        sep = " ± "),
+            Weight = paste(round(mean(weight, na.rm = TRUE),2), 
+                        round(sd(weight, na.rm = TRUE),2), 
+                        sep = " ± "),
+            BMI = paste(round(mean(bmi, na.rm = TRUE),2), 
+                        round(sd(bmi, na.rm = TRUE),2), 
+                        sep = " ± "),
+           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
+                        round(sd(vo2.kg, na.rm = TRUE),2), 
+                        sep = " ± "),
+           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
+                        round(sd(vo2, na.rm = TRUE),2), 
+                        sep = " ± "),
+           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
+                        round(sd(watt, na.rm = TRUE),2), 
+                        sep = " ± ")) %>% 
+ mutate(N = as.character(N)) %>% 
+  pivot_longer(names_to = "variables",
+               values_to = "values",
+               cols = N:Wmax) %>% 
+  mutate(
+    variables = case_when(
+      variables == "rel.VO2max" ~ "VO2max (ml/kg/min)",
+      variables == "Weight" ~ "Body weight (kg)",
+      variables == "VO2max" ~ "VO2max (ml/min)",
+       variables == "Wmax" ~ "Wmax (watt)",
+      variables == "Age" ~ "Age (years)",
+      TRUE ~ variables))
+
+descript.2 <- final.data %>% 
+ select(id, timepoint, group, test, period, watt) %>% 
+  filter(period == 1, test == "per", timepoint == "pre", 
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% c("control")) %>% 
+  group_by() %>% 
+  summarise(
+    variables = "15min avg (watt)",
+    values = paste(round(mean(watt, na.rm = TRUE), 2), 
+                   round(sd(watt, na.rm = TRUE), 2), 
+                   sep = " ± "))
+
+
+descript_combined <- rbind(descript, descript.2)
+print(descript_combined)
+
+gt(descript_combined) %>% 
+cols_label(variables = "Variables",
+           values = "Mean ± SD") %>% 
+  tab_header(title = "Characteristics of the participants")
+
+```
+
+
+## Overview of all values for all variables at each time-point
+
+```{r}
+#| echo: false
+#| warning: false
+##Descriptive stats for the entire project
+
+# Define the function as base.max.sum
+base.max.sum <- function(data, period_value, timepoint_value) {
+  data %>%
+    select(id, timepoint, test, period, sex, group, weight, height, age, vo2.kg, rel.vo2, vo2, watt) %>%
+    filter(
+      period == period_value, test == "max", timepoint == timepoint_value,
+      !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+      !group %in% "control"
+    ) %>%
+    mutate(
+      bmi = weight / (height / 100)^2,
+      wmaxkg = watt / weight
+    ) %>%
+    summarise(
+      Weight = paste(round(mean(weight, na.rm = TRUE), 2), round(sd(weight, na.rm = TRUE), 2), sep = " ± "),
+      BMI = paste(round(mean(bmi, na.rm = TRUE), 2), round(sd(bmi, na.rm = TRUE), 2), sep = " ± "),
+      rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE), 2), round(sd(vo2.kg, na.rm = TRUE), 2), sep = " ± "),
+      VO2max = paste(round(mean(vo2, na.rm = TRUE), 2), round(sd(vo2, na.rm = TRUE), 2), sep = " ± "),
+      Wmax = paste(round(mean(watt, na.rm = TRUE), 2), round(sd(watt, na.rm = TRUE), 2), sep = " ± "),
+      Wmaxkg = paste(round(mean(wmaxkg, na.rm = TRUE), 2), round(sd(wmaxkg, na.rm = TRUE), 2), sep = " ± ")
+    ) %>%
+    pivot_longer(
+      names_to = "variables",
+      values_to = "values",
+      cols = Weight:Wmaxkg
+    )
+}
+
+# Use the function to create the datasets
+base_pre.1 <- base.max.sum(final.data, period_value = 1, timepoint_value = "pre")
+base_post.1 <- base.max.sum(final.data, period_value = 1, timepoint_value = "post")
+base_pre.2 <- base.max.sum(final.data, period_value = 2, timepoint_value = "pre")
+base_post.2 <- base.max.sum(final.data, period_value = 2, timepoint_value = "post")
+
+
+
+# Define the function as base.w15.sum
+base.w15.sum <- function(data, period_value, timepoint_value) {
+  data %>%
+    select(id, timepoint, test, group, period, weight, watt) %>%
+    filter(period %in% c(period_value), test == "per", timepoint == timepoint_value,
+           !id %in% c(6, 11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+           !group %in% "control") %>%
+    mutate(w15minkg = watt / weight) %>%
+    group_by() %>%
+    summarise(
+      W15min = paste(round(mean(watt, na.rm = TRUE), 2), 
+                     round(sd(watt, na.rm = TRUE), 2), 
+                     sep = " ± "),
+      W15minkg = paste(round(mean(w15minkg, na.rm = TRUE), 2), 
+                       round(sd(w15minkg, na.rm = TRUE), 2), 
+                       sep = " ± ")
+    ) %>%
+    pivot_longer(names_to = "variables", values_to = "values", cols = W15min:W15minkg)
+}
+
+# extract each period and timepoint
+base.w15.1 <- base.w15.sum(final.data, period_value = 1, timepoint_value = "pre")
+base.w15.2 <- base.w15.sum(final.data, period_value = 2, timepoint_value = "pre")
+base.w15.3 <- base.w15.sum(final.data, period_value = 1, timepoint_value = "post")
+base.w15.4 <- base.w15.sum(final.data, period_value = 2, timepoint_value = "post")
+
+
+base.ge.sum <- function(data, period_value, timepoint_value) {
+  data %>%
+    select(id, timepoint, test, period, group, sex, GE) %>%
+    filter(
+      period == period_value,
+      test == "sub_40",
+      timepoint == timepoint_value,
+      !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+      !group %in% "control"
+    ) %>%
+    group_by() %>%
+    summarise(
+      GE.40 = paste(round(mean(GE, na.rm = TRUE), 2), round(sd(GE, na.rm = TRUE), 2), sep = " ± ")
+    ) %>%
+    pivot_longer(names_to = "variables", values_to = "values", cols = GE.40)
+}
+
+# Use the function for each combination of period and timepoint
+base.ge.1 <- base.ge.sum(final.data, period_value = 1, timepoint_value = "pre")
+base.ge.2 <- base.ge.sum(final.data, period_value = 1, timepoint_value = "post")
+base.ge.3 <- base.ge.sum(final.data, period_value = 2, timepoint_value = "pre")
+base.ge.4 <- base.ge.sum(final.data, period_value = 2, timepoint_value = "post")
+
+
+
+base.uti.sum <- function(data, period_value, timepoint_value) {
+  data %>%
+    select(id, timepoint, test, period, group, sex, rel.vo2) %>%
+    filter(
+      period == period_value,
+      test == "per",
+      timepoint == timepoint_value,
+      !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+      !group %in% "control"
+    ) %>%
+    group_by() %>%
+    summarise(
+      uti = paste(round(mean(rel.vo2, na.rm = TRUE), 2), round(sd(rel.vo2, na.rm = TRUE), 2), sep = " ± ")
+    ) %>%
+    pivot_longer(names_to = "variables", values_to = "values", cols = uti)
+}
+
+# Use the function for each combination of period and timepoint
+base.uti.1 <- base.uti.sum(final.data, period_value = 1, timepoint_value = "pre")
+base.uti.2 <- base.uti.sum(final.data, period_value = 1, timepoint_value = "post")
+base.uti.3 <- base.uti.sum(final.data, period_value = 2, timepoint_value = "pre")
+base.uti.4 <- base.uti.sum(final.data, period_value = 2, timepoint_value = "post")
+
+
+extract_numeric <- function(x) {
+  as.numeric(sub(" ±.*", "", x))
+}
+
+base.uti.m1 <- right_join(base.uti.1, base.uti.2, by = "variables") %>% 
+  rename(pre_1 = values.x, post_1 = values.y) %>% 
+   mutate(pre_1_numeric = extract_numeric(pre_1),
+         post_1_numeric = extract_numeric(post_1),
+         change = post_1_numeric - pre_1_numeric) %>% 
+  select(variables, pre_1, post_1, change) %>% 
+  print()
+
+
+base.uti.m2 <- right_join(base.uti.3, base.uti.4, by = "variables") %>% 
+  rename(pre_2 = values.x, post_2 = values.y) %>% 
+   mutate(pre_2_numeric = extract_numeric(pre_2),
+         post_2_numeric = extract_numeric(post_2),
+         change = post_2_numeric - pre_2_numeric) %>% 
+  select(variables, pre_2, post_2, change) %>% 
+  print()
+
+base.uti.m3 <- right_join(base.uti.m1, base.uti.m2, by = "variables")
+
+
+base.w15.m1 <- right_join(base.w15.1, base.w15.3, by = "variables") %>% 
+  rename(pre_1 = values.x, post_1 = values.y) %>% 
+   mutate(pre_1_numeric = extract_numeric(pre_1),
+         post_1_numeric = extract_numeric(post_1),
+         change = post_1_numeric - pre_1_numeric) %>% 
+  select(variables, pre_1, post_1, change) %>% 
+  print()
+
+
+base.w15.m2 <- right_join(base.w15.2, base.w15.4, by = "variables") %>% 
+  rename(pre_2 = values.x, post_2 = values.y) %>% 
+   mutate(pre_2_numeric = extract_numeric(pre_2),
+         post_2_numeric = extract_numeric(post_2),
+         change = post_2_numeric - pre_2_numeric) %>% 
+  select(variables, pre_2, post_2, change) %>% 
+  print()
+
+base.w15.m3 <- right_join(base.w15.m1, base.w15.m2, by = "variables") 
+
+base.ge.m1 <- right_join(base.ge.1, base.ge.2, by = "variables") %>% 
+  rename(pre_1 = values.x, post_1 = values.y) %>% 
+   mutate(pre_1_numeric = extract_numeric(pre_1),
+         post_1_numeric = extract_numeric(post_1),
+         change = post_1_numeric - pre_1_numeric) %>% 
+  select(variables, pre_1, post_1, change)
+
+
+base.ge.m2 <- right_join(base.ge.3, base.ge.4, by = "variables") %>% 
+  rename(pre_2 = values.x, post_2 = values.y) %>% 
+   mutate(pre_2_numeric = extract_numeric(pre_2),
+         post_2_numeric = extract_numeric(post_2),
+         change = post_2_numeric - pre_2_numeric) %>% 
+  select(variables, pre_2, post_2, change) 
+
+base.ge.m3 <- right_join(base.ge.m1, base.ge.m2, by = "variables") %>% 
+  print()
+
+
+base_p1 <- right_join(base_pre.1, base_post.1, by = "variables") %>% 
+  select(variables, values.x, values.y) %>% 
+  rename(pre_1 = values.x, post_1 = values.y) %>%
+  mutate(pre_1_numeric = extract_numeric(pre_1),
+         post_1_numeric = extract_numeric(post_1),
+         change = post_1_numeric - pre_1_numeric) %>% 
+  select(variables, pre_1, post_1, change)
+
+base_p2 <- right_join(base_pre.2, base_post.2, by = "variables") %>% 
+select(variables, values.x, values.y) %>% 
+  rename(pre_2 = values.x, post_2 = values.y) %>% 
+ mutate(pre_2_numeric = extract_numeric(pre_2),
+         post_2_numeric = extract_numeric(post_2),
+         change = post_2_numeric - pre_2_numeric) %>% 
+  select(variables, pre_2, post_2, change)
+
+base_p12 <- right_join(base_p1, base_p2, by = "variables")
+
+base_p12.final <- bind_rows(base_p12, base.w15.m3, base.ge.m3, base.uti.m3) %>% 
+mutate(
+    variables = case_when(
+      variables == "rel.VO2max" ~ "VO2max (ml/kg/min)",
+      variables == "Weight" ~ "Body weight (kg)",
+      variables == "VO2max" ~ "VO2max (ml/min)",
+      variables == "Wmax" ~ "Wmax (watt)",
+      TRUE ~ variables)) %>% 
+  mutate(diff.change = change.y - change.x)
+
+
+gt_training <- gt(base_p12.final) %>% 
+  cols_label(pre_1 = "Pre 1",
+             post_1 = "Post 1",
+             pre_2 = "Pre 2",
+             post_2 = "Post 2",
+             variables = "Variables",
+             change.x = "Change",
+             change.y = "Change",
+             diff.change = "Change Difference")
+gt_training
+```
+
+
+## characteristics at each baseline
+
+```{r}
+#| echo: false
+#| warning: false
+
+#### baseline values
+
+##Descriptive data from baseline 1 (Pre 1)
+
+base1 <- final.data %>% 
+select(id, timepoint, test, period, sex, group, weight, height, age, vo2.kg, rel.vo2, vo2, watt) %>% 
+  filter(period == 1, test == "max", timepoint == "pre", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% ("control"))%>% 
+  mutate(bmi = weight/(height/100)^2) %>% 
+  group_by() %>% 
+ summarise( Weight = paste(round(mean(weight, na.rm = TRUE),2), 
+                        round(sd(weight, na.rm = TRUE),2), 
+                        sep = " ± "),
+            BMI = paste(round(mean(bmi, na.rm = TRUE), 2), 
+                round(sd(bmi, na.rm = TRUE), 2), 
+                sep = " ± "),
+           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
+                        round(sd(vo2.kg, na.rm = TRUE),2), 
+                        sep = " ± "),
+           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
+                        round(sd(vo2, na.rm = TRUE),2), 
+                        sep = " ± "),
+           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
+                        round(sd(watt, na.rm = TRUE),2), 
+                        sep = " ± ")) %>% 
+  pivot_longer(names_to = "variables",
+               values_to = "values",
+               cols = Weight:Wmax) %>% 
+  print()
+
+
+
+##descriptive data from Baseline 2 (Pre 2)
+
+base1_2 <- final.data %>% 
+select(id, timepoint, test, period, sex, weight, group, vo2.kg, rel.vo2, vo2, watt) %>% 
+  filter(period == 2, test == "max", timepoint == "pre", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+          !group %in% ("control")) %>% 
+  group_by() %>% 
+ summarise(Weight = paste(round(mean(weight, na.rm = TRUE),2), 
+                        round(sd(weight, na.rm = TRUE),2), 
+                        sep = " ± "),
+           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
+                        round(sd(vo2.kg, na.rm = TRUE),2), 
+                        sep = " ± "),
+           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
+                        round(sd(vo2, na.rm = TRUE),2), 
+                        sep = " ± "),
+           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
+                        round(sd(watt, na.rm = TRUE),2), 
+                        sep = " ± ")) %>% 
+  pivot_longer(names_to = "variables",
+               values_to = "values",
+               cols = Weight:Wmax)
+  
+merge <- base1 %>% 
+right_join(base1_2, base1, 
+               by = c("variables")) %>% 
+mutate(
+    variables = case_when(
+      variables == "rel.VO2max" ~ "VO2max (ml/kg/min)",
+      variables == "Weight" ~ "Body weight (kg)",
+      variables == "VO2max" ~ "VO2max (ml/min)",
+       variables == "Wmax" ~ "Wmax (watt)",
+      TRUE ~ variables))
+
+base.per1 <- final.data %>% 
+ select(id, timepoint, test, period, group, watt) %>% 
+  filter(period %in% c(1), test == "per", timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+          !group %in% ("control")) %>% 
+  group_by() %>% 
+  summarise(
+    variables = "W15min (watt)",
+    values = paste(round(mean(watt, na.rm = TRUE), 2), 
+                   round(sd(watt, na.rm = TRUE), 2), 
+                   sep = " ± "))
+
+
+base.per2 <- final.data %>% 
+ select(id, timepoint, test, period, group, watt) %>% 
+  filter(period %in% c(2), test == "per", timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+          !group %in% ("control")) %>% 
+  group_by() %>% 
+  summarise(
+    variables = "W15min (watt)",
+    values = paste(round(mean(watt, na.rm = TRUE), 2), 
+                   round(sd(watt, na.rm = TRUE), 2), 
+                   sep = " ± "))
+  merge.per <- base.per1 %>% 
+right_join(base.per2, base.per1, 
+               by = c("variables"))
+
+  
+final.base <- rbind(merge, merge.per)
+
+gt(final.base) %>% 
+cols_label(variables = "Variables",
+           values.x = "Period 1",
+           values.y = "period 2") %>% 
+  tab_header(title = "Baseline Characteristics")
+```
+
+
+
+## Session descriptives
+
+```{r}
+#| echo: false
+#| warning: false
+
+### Session descriptives
+
+session <- session.data %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type %in% c("4x5", "4x8", "6x6")) %>%
+  select(!hr.max) %>% 
+  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
+  select(hr_1:rpe_2) %>% 
+  summarise(across(
+    hr_1:rpe_2, 
+    ~paste(round(mean(.x, na.rm = TRUE), 2), round(sd(.x, na.rm = TRUE), 2), sep = " ± "),
+    .names = "{.col}_mean"
+  )) %>% 
+  pivot_longer(
+    cols = ends_with("_mean"), 
+    names_to = c("type", "period"), 
+    names_pattern = "(.*)_(\\d+)_mean",
+    values_to = "values"
+  ) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "mean_sd_p") %>% 
+print()
+
+# Second part: combining with session type data
+session.type <- session.data %>% 
+  select(id, period, session.n, type) %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type %in% c("6x6", "4x8", "4x5"),
+         period %in% c(1, 2)) %>% 
+  select(id, period, type) %>% 
+  group_by(id, type, period) %>%
+ summarise(count = n(), .groups = "drop") %>% 
+  pivot_wider(names_from = period,
+              values_from = count,
+              names_prefix = "p_") %>% 
+  print()
+
+## period 1
+
+  session.type.p1 <- session.type %>% 
+  select(id, type, p_1) %>% 
+  group_by(type) %>% 
+  summarise(
+    mean_count = mean(p_1, na.rm = TRUE),
+    sd_count = sd(p_1, na.rm = TRUE),
+    .groups = "drop") %>% 
+    rowwise() %>% 
+  mutate(
+    mean_sd_p1 = sprintf("%.1f ± %.1f", mean_count, sd_count)  # Combine mean and SD with 1 decimal
+  ) %>% 
+  ungroup() %>% 
+  select(type, mean_sd_p1) %>% 
+  print()
+  
+    ## Period 2
+  
+  session.type.p2 <- session.type %>% 
+  select(id, type, p_2) %>% 
+  group_by(type) %>% 
+  summarise(
+    mean_count = mean(p_2, na.rm = TRUE),
+    sd_count = sd(p_2, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+     rowwise() %>% 
+  mutate(
+    mean_sd_p2 = sprintf("%.1f ± %.1f", mean_count, sd_count)  # Combine mean and SD with 1 decimal
+  ) %>% 
+  ungroup() %>% 
+  select(type, mean_sd_p2) %>% 
+  print()
+  
+  ## total
+  
+  session.type.total <- session.data %>% 
+  select(id, period, session.n, type) %>% 
+  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         type %in% c("6x6", "4x8", "4x5"),
+         period %in% c(1, 2)) %>% 
+     group_by(id, period) %>%
+  summarise(total_sessions = n(), .groups = "drop") %>% 
+       group_by(period) %>% 
+  summarise(
+    mean_sessions = mean(total_sessions, na.rm = TRUE),  
+    sd_sessions = sd(total_sessions, na.rm = TRUE),      
+    mean_sd_combined = sprintf("%.1f ± %.1f", 
+                               mean(total_sessions, na.rm = TRUE), 
+                               sd(total_sessions, na.rm = TRUE))) %>% 
+    select(period, mean_sd_combined) %>% 
+pivot_wider(names_from = period, values_from = mean_sd_combined, names_prefix = "mean_sd_p") %>% 
+    print()
+  
+  
+  
+
+# Combine with original dataframe and convert columns to character
+session.type.comb <- right_join(session.type.p1, session.type.p2)
+
+  bind.session.data <- bind_rows(session, session.type.comb, session.type.total) %>% 
+  print()
+
+
+# Create the gt table
+session.type.tbl <- gt(bind.session.data) %>%
+  tab_row_group(
+    label = " Mean completed sessions (N)",
+    rows = type %in% c("4x5", "4x8", "6x6", "Total (N)")
+  ) %>%
+  tab_row_group(
+    label = "Mean ± sd values during the interventions",
+    rows = type %in% c("hr", "watt", "rpe"))
+
+session.type.tbl
+```
+
+
+
+
+
+
+
+
+

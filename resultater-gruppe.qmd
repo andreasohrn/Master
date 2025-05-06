@@ -1,0 +1,401 @@
+---
+title: "resultater.gruppe"
+format: docx
+---
+
+```{r}
+#| echo: false
+
+
+##Loading necessary items
+
+#| echo: false
+#| warning: false
+library(repeatData)
+library(readxl)
+library(tidyverse)
+library(gt)
+library(lme4)
+library(irr)
+library(cowplot)
+library(psych)
+library(ggplot2)
+library(webshot2)
+
+data(final.data)
+data("cycling.data")
+data("hb.data")
+```
+
+## Calculating SWC and CV for each variable
+
+```{r}
+#| echo: false
+cv.vo2 <- cycling.data %>%
+  select(id, period, timepoint, test, group, vo2) %>%
+  filter(test == "max" & 
+         ((period == 1 & (timepoint == 2 | timepoint == 3)) | 
+          (period == 2 & (timepoint == 1 | timepoint == 2))),
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  mutate(timepoint = case_when(
+    period == 1 & timepoint == 2 ~ "pre1",
+    period == 1 & timepoint == 3 ~ "pre2",
+    period == 2 & timepoint == 1 ~ "pre1",
+    period == 2 & timepoint == 2 ~ "pre2")) %>%
+  select(id, period, timepoint, vo2) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2, values_fn = list(vo2 = mean)) %>% 
+  mutate(diff = pre2 - pre1) %>% 
+  summarise(mean_diff = round(mean(diff, na.rm = TRUE), 2),
+             mean = round(mean(c(pre1, pre2),na.rm = T), 2),
+             sd_diff = round(sd(diff, na.rm = TRUE), 2),
+             te = round((sd_diff / sqrt(2)), 2),
+             cv = round((te / mean) * 100, 2)) %>% 
+
+  print()
+
+swc.vo2 <- final.data %>% 
+  select(id, period, timepoint, test, group, vo2) %>%
+  filter(test == "max", 
+         period == 1,
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% ("control"))%>%
+ summarise(mean = round(mean(vo2), 0),
+          swc = round(sd(vo2) * 0.2, 0),
+          swc.p = round((swc/mean)*100, 1)) %>% 
+  print()
+  
+```
+
+```{r}
+#| echo: false
+cv.wmax <- cycling.data %>%
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "max" & 
+         ((period == 1 & (timepoint == 2 | timepoint == 3)) | 
+          (period == 2 & (timepoint == 1 | timepoint == 2))),
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control"))%>%
+  mutate(timepoint = case_when(
+    period == 1 & timepoint == 2 ~ "pre1",
+    period == 1 & timepoint == 3 ~ "pre2",
+    period == 2 & timepoint == 1 ~ "pre1",
+    period == 2 & timepoint == 2 ~ "pre2")) %>%
+  select(id, period, timepoint, watt) %>%
+  pivot_wider(names_from = timepoint, values_from = watt, values_fn = list(watt = mean)) %>% 
+  mutate(diff = pre2 - pre1) %>% 
+  summarise(mean_diff = round(mean(diff, na.rm = TRUE), 2),
+             mean = round(mean(c(pre1, pre2),na.rm = T), 2),
+             sd_diff = round(sd(diff, na.rm = TRUE), 2),
+             te = round((sd_diff / sqrt(2)), 2),
+             cv = round((te / mean) * 100, 2)) %>% 
+  print()
+
+
+swc.wmax <- final.data %>% 
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "max", 
+         period == 1,
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% ("control"))%>%
+ summarise(mean = round(mean(watt), 0),
+          swc = round(sd(watt) * 0.2, 0),
+          swc.p = round((swc/mean)*100, 1)) %>% 
+  print()
+  
+
+```
+
+
+```{r}
+#| echo: false
+cv.w15 <- cycling.data %>%
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "per" & 
+         ((period == 1 & (timepoint == 2 | timepoint == 3)) | 
+          (period == 2 & (timepoint == 1 | timepoint == 2))),
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  mutate(timepoint = case_when(
+    period == 1 & timepoint == 3 ~ "pre2",
+    period == 2 & timepoint == 1 ~ "pre1",
+    period == 2 & timepoint == 2 ~ "pre2")) %>%
+  select(id, period, timepoint, watt) %>%
+  pivot_wider(names_from = timepoint, values_from = watt, values_fn = list(watt = mean)) %>% 
+  mutate(diff = pre2 - pre1) %>% 
+  summarise(mean_diff = round(mean(diff, na.rm = TRUE), 2),
+             mean = round(mean(c(pre1, pre2),na.rm = T), 2),
+             sd_diff = round(sd(diff, na.rm = TRUE), 2),
+             te = round((sd_diff / sqrt(2)), 2),
+             cv = round((te / mean) * 100, 2)) %>% 
+  print()
+
+swc.w15 <- final.data %>% 
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "per", 
+         period == 1,
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !group %in% ("control"))%>%
+ summarise(mean = round(mean(watt), 0),
+          swc = round(sd(watt) * 0.2, 2),
+          swc.p = round((swc/mean)*100, 1)) %>% 
+  print()
+```
+
+```{r}
+#| echo: false
+combined_cv <- bind_rows(cv.vo2, cv.wmax, cv.w15) %>% 
+  select(te, cv) %>% 
+  mutate(variables = c("vo2max", "wmax", "w15min")) %>% 
+  select(variables, te, cv) %>% 
+print()
+
+gt(combined_cv)
+```
+
+## Plots visualizing the mean compared to zero and SWC
+
+```{r}
+#| echo: false
+lmm_vo2.percent <- final.data %>%
+  ungroup() %>%
+  select(id, period, timepoint, test, group, vo2) %>%
+  filter(test == "max",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+    mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%
+  print()
+
+ 
+m.vo2.g <- lmer(vo2 ~ timepoint * period + (1|id), data = lmm_vo2.percent)  
+
+m2.vo2.g <- lmer(log(vo2) ~ timepoint * period + (1|id), data = lmm_vo2.percent)  
+  
+
+summary(m.vo2.g)
+summary(m2.vo2.g)
+
+
+
+100 * (exp(coef(summary(m2.vo2.g))[2, 1]) - 1)
+
+100 * (exp(coef(summary(m2.vo2.g))[4, 1]) - 1)
+
+ci.m.vo2.g <- 100 * (exp(confint(m2.vo2.g)[6,c(1,2)]) - 1)
+
+l.ci.lmm.vo2.p <- ci.m.vo2.g[1]
+u.ci.lmm.vo2.p <- ci.m.vo2.g[2]
+
+ci.df.vo2 <- data.frame(
+  LowerCI = l.ci.lmm.vo2.p,
+  UpperCI = u.ci.lmm.vo2.p)
+  
+
+  
+plot.per.vo2 <- lmm_vo2.percent %>%
+  pivot_wider(names_from = timepoint, values_from = vo2) %>%
+  mutate(change = post - pre) %>%
+  mutate(change.per = (change / pre) * 100) %>% 
+  select(id, period, test, change.per) %>%
+  pivot_wider(names_from = period, values_from = change.per, names_prefix = "per_") %>%
+  mutate(percent.diff = per_2 - per_1) %>%
+  group_by() %>%
+  summarise(mean.diff.vo2.per = mean(percent.diff)) %>%
+  mutate(group = "vo2") %>%
+  print()
+
+
+p.vo2.per <- ggplot(plot.per.vo2, aes(x = group, y = mean.diff.vo2.per)) + 
+  geom_errorbar(aes(ymin = l.ci.lmm.vo2.p, ymax = u.ci.lmm.vo2.p), width = 0.1) +
+  geom_point(size = 4, fill = "blue", shape = 21) +
+  geom_hline(yintercept = c(-(swc.vo2$swc.p), swc.vo2$swc.p), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey")+
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -(swc.vo2$swc.p), ymax = swc.vo2$swc.p), fill = "grey", alpha = 0.2) +  # Grey shaded area
+  labs(y = "% difference in change", x = "", title = expression(VO[2][max])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-8, 14, by = 2), labels = seq(-8, 14, by = 2)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5),
+     axis.text = element_text(size = 13))
+
+print(p.vo2.per)
+
+
+  
+```
+
+
+```{r}
+#| echo: false
+lmm_wmax.percent <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%
+  print()
+  
+m.wmax.g <- lmer(watt ~ timepoint * period + (1|id), data = lmm_wmax.percent)  
+
+m2.wmax.g <- lmer(log(watt) ~ timepoint * period + (1|id), data = lmm_wmax.percent)  
+  
+
+summary(m.wmax.g)
+summary(m2.wmax.g)
+
+
+
+100 * (exp(coef(summary(m2.wmax.g))[2, 1]) - 1)
+
+100 * (exp(coef(summary(m2.wmax.g))[4, 1]) - 1)
+
+ci.m.wmax.g <- 100 * (exp(confint(m2.wmax.g)[6,c(1,2)]) - 1)
+
+l.ci.lmm.wmax.p <- ci.m.wmax.g[1]
+u.ci.lmm.wmax.p <- ci.m.wmax.g[2]
+  
+  ci.df.wmax <- data.frame(
+  LowerCI = l.ci.lmm.wmax.p,
+  UpperCI = u.ci.lmm.wmax.p)
+
+  plot.per.wmax <- lmm_wmax.percent %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>%
+  mutate(change = post - pre) %>%
+  mutate(change.per = (change / pre) * 100) %>% 
+  select(id, period, test, change.per) %>% 
+  pivot_wider(names_from = period, values_from = change.per, names_prefix = "per_") %>% 
+  mutate(percent.diff = per_2 - per_1) %>% 
+  group_by() %>% 
+  summarise(mean.diff.wmax.per = mean(percent.diff)) %>% 
+   mutate(group = "wmax") %>% 
+  print()
+  
+
+p.wmax.per <- ggplot(plot.per.wmax, aes(x = group, y = mean.diff.wmax.per)) +
+  geom_errorbar(aes(ymin = l.ci.lmm.wmax.p, ymax = u.ci.lmm.wmax.p), width = 0.1) + 
+  geom_point(size = 4, fill = "blue", shape = 21) +
+  geom_hline(yintercept = c(-(swc.wmax$swc.p), swc.wmax$swc.p), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey")+
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -(swc.wmax$swc.p), ymax = swc.wmax$swc.p), fill = "grey", alpha = 0.2) +
+  labs(y = "% difference in change", x = "", title = expression(W[max])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-8, 14, by = 2), labels = seq(-8, 14, by = 2)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5),
+     axis.text = element_text(size = 13))
+
+print(p.wmax.per)
+
+
+```
+
+
+```{r}
+#| echo: false
+lmm_w15.percent <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "per", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%
+  print()
+  
+m.w15.g <- lmer(watt ~ timepoint * period + (1|id), data = lmm_w15.percent)  
+
+m2.w15.g <- lmer(log(watt) ~ timepoint * period + (1|id), data = lmm_w15.percent)  
+  
+
+summary(m.w15.g)
+summary(m2.w15.g)
+
+
+
+100 * (exp(coef(summary(m2.w15.g))[2, 1]) - 1)
+
+100 * (exp(coef(summary(m2.w15.g))[4, 1]) - 1)
+
+ci.m.w15.g <- 100 * (exp(confint(m2.w15.g)[6,c(1,2)]) - 1)
+
+l.ci.lmm.w15.p <- ci.m.w15.g[1]
+u.ci.lmm.w15.p <- ci.m.w15.g[2]
+
+
+ci.df.w15 <- data.frame(
+  LowerCI = l.ci.lmm.w15.p,
+  UpperCI = u.ci.lmm.w15.p)
+
+
+plot.per.w15 <- lmm_w15.percent %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>%
+  mutate(change = post - pre) %>%
+  mutate(change.per = (change / pre) * 100) %>% 
+  select(id, period, test, change.per) %>% 
+  pivot_wider(names_from = period, values_from = change.per, names_prefix = "per_") %>% 
+  mutate(percent.diff = per_2 - per_1) %>% 
+  group_by() %>% 
+  summarise(mean.diff.w15.per = mean(percent.diff)) %>% 
+  mutate(group = "w15") %>% 
+  print()
+
+
+
+
+p.w15.per <- ggplot(plot.per.w15, aes(x = group, y = mean.diff.w15.per)) +
+  geom_errorbar(aes(ymin = l.ci.lmm.w15.p, ymax = u.ci.lmm.w15.p), width = 0.1) +  # Add error bars using CI
+  geom_point(size = 4, fill = "blue", shape = 21) +
+  geom_hline(yintercept = c(-(swc.w15$swc.p), swc.w15$swc.p), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey")+
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -(swc.w15$swc.p), ymax = swc.w15$swc.p), fill = "grey", alpha = 0.2) +   # Grey shaded area
+  labs(y = "% difference in change", x = "", title = expression(W[15][min])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-8, 14, by = 2), labels = seq(-8, 14, by = 2)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5),
+    axis.text = element_text(size = 13))
+
+print(p.w15.per)
+
+```
+
+
+
+
+
+```{r}
+#| echo: false
+comb.plot.gruppe.per <- plot_grid(p.vo2.per, p.wmax.per, p.w15.per, 
+                                  #gruppe.box.vo2.plot, gruppe.box.wmax.plot, gruppe.box.w15.plot, 
+                                labels = "AUTO",
+                              nrow = 1)
+print(comb.plot.gruppe.per)
+
+#ggsave(filename = "combined_plot_group.per.jpeg", 
+       #plot = comb.plot.gruppe.per, 
+       #width = 210, height = 130, units = "mm")
+```

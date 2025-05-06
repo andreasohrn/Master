@@ -217,7 +217,7 @@ merge.p
 
 ```{r}
 
-test <- cycling.data %>% 
+test.vo2 <- cycling.data %>% 
   select(id, period, timepoint, test, vo2) %>% 
   filter(test == "max", (timepoint == 2 | timepoint == 3), period == 1) %>% 
   select(id, timepoint, vo2) %>% 
@@ -227,11 +227,52 @@ test <- cycling.data %>%
              mean = mean(c(timepoint_2, timepoint_3),na.rm = T),
              sd_diff = sd(diff, na.rm = TRUE),
              te = sd_diff / sqrt(2),
-             cv = (te / mean) * 100)
+             cv = (te / mean) * 100) %>% 
+  print()
   
 ```
 
+
+```{r}
+test.wmax <- cycling.data %>% 
+  select(id, period, timepoint, test, watt) %>% 
+  filter(test == "max", (timepoint == 2 | timepoint == 3), period == 1) %>% 
+  select(id, timepoint, watt) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt, names_prefix = "timepoint_", values_fn = list(watt = mean)) %>% 
+  mutate(diff = timepoint_3 - timepoint_2) %>% 
+  summarise (mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(timepoint_2, timepoint_3),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+```
+
+
+```{r}
+test.w15 <- cycling.data %>% 
+  select(id, period, timepoint, test, watt) %>% 
+  filter(test == "per", (timepoint == 2 | timepoint == 3), period == 1) %>% 
+  select(id, timepoint, watt) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt, names_prefix = "timepoint_", values_fn = list(watt = mean)) %>% 
+  mutate(diff = timepoint_3 - timepoint_2) %>% 
+  summarise (mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(timepoint_2, timepoint_3),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+```
+
+
+
+
+
 ##calculate Mixed Effects Model for VO2max
+
+
+
+
 ```{r}
 
 ### Model to check Group differences between the two periods
@@ -611,6 +652,20 @@ quantile(bo.sess.ftp$t, c(0.025, 0.975))
 
 
 
+
+
+
+```{r}
+icc.test <- lmm_wmax %>%
+  select(change, id, period) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+matrix.icc <- as.matrix(icc.test[, c("period_1", "period_2")])
+
+ICC <- ICC(matrix.icc, alpha=.05)
+print(ICC)
+```
 
 
 

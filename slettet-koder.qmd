@@ -1,0 +1,773 @@
+---
+title: "Slettet koder"
+format: html
+---
+
+
+#Box plots
+
+
+```{r}
+#| echo: false
+gruppe.box.vo2 <- final.data %>%
+  select(id, period, timepoint, test, group, vo2) %>%
+  filter(test == "max", 
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2) %>%
+  mutate(change = post - pre) %>%
+  pivot_longer(cols = c("post", "pre"), names_to = "timepoint", values_to = "values") %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%  # Adjust factor levels here
+  print()
+
+gruppe.box.vo2.plot <- ggplot(gruppe.box.vo2, aes(x = factor(period), y = values, fill = timepoint)) +
+  geom_boxplot() +
+  labs(title = "",
+       x = "Period",
+       y = expression("VO"[2][max] * " (mL·min"^{-1} * ")"),
+       fill = "Timepoint") +
+  scale_fill_manual(values = c("pre" = "light blue", "post" = "blue")) +
+  theme_minimal() +
+  theme(
+    aspect.ratio = 1,
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    plot.title = element_text(hjust = 0.5, vjust = 10),
+    axis.text = element_text(size = 13),
+    legend.position = "none")
+
+
+gruppe.box.vo2.plot
+  
+```
+
+
+```{r}
+#| echo: false
+
+gruppe.box.wmax <- final.data %>%
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "max", 
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control)")) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>%
+  mutate(change = post - pre) %>%
+  pivot_longer(cols = c("post", "pre"), names_to = "timepoint", values_to = "values") %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%  # Adjust factor levels here
+  print()
+
+gruppe.box.wmax.plot <- ggplot(gruppe.box.wmax, aes(x = factor(period), y = values, fill = timepoint)) +
+  geom_boxplot() +
+  labs(title = "",
+       x = "Period",
+       y = "Watt",
+       fill = "Timepoint") +
+  scale_fill_manual(values = c("pre" = "light blue", "post" = "blue")) +
+  theme_minimal() +
+  theme(
+    aspect.ratio = 1,
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    plot.title = element_text(hjust = 0.5, vjust = 10),
+    axis.text = element_text(size = 13),
+    legend.position = "none")
+
+gruppe.box.wmax.plot
+  
+
+```
+
+```{r}
+#| echo: false
+gruppe.box.w15 <- final.data %>%
+  select(id, period, timepoint, test, group, watt) %>%
+  filter(test == "per", 
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>%
+  mutate(change = post - pre) %>%
+  pivot_longer(cols = c("post", "pre"), names_to = "timepoint", values_to = "values") %>%
+  mutate(timepoint = factor(timepoint, levels = c("pre", "post"))) %>%
+  print()
+
+gruppe.box.w15.plot <- ggplot(gruppe.box.wmax, aes(x = factor(period), y = values, fill = timepoint)) +
+  geom_boxplot() +
+  labs(title = "",
+       x = "Period",
+       y = "Watt",
+       fill = "Timepoint") +
+  scale_fill_manual(values = c("pre" = "light blue", "post" = "blue")) +
+  theme_minimal() +
+  theme(
+    aspect.ratio = 1,
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 13),
+    plot.title = element_text(hjust = 0.5, vjust = 10),
+    legend.position = "none")
+
+gruppe.box.w15.plot
+  
+```
+
+
+
+
+
+
+```{r}
+#| echo: false
+comb.plot.gruppe.box <- plot_grid(gruppe.box.vo2.plot, gruppe.box.wmax.plot, gruppe.box.w15.plot, 
+                                labels = "AUTO",
+                              nrow = 1)
+print(comb.plot.gruppe.box)
+
+ggsave(filename = "combined_plot_group.box.jpeg", 
+       plot = comb.plot.gruppe.box, 
+       width = 210, height = 100, units = "mm")
+```
+
+
+
+
+
+
+
+
+## create a plot that visualize if the mean diff is consistent
+
+
+```{r}
+#| echo: false
+
+change.df <- final.data %>%
+  select(id, timepoint, period, group, test, vo2, watt) %>%
+  filter(test %in% c("per", "max"),
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = c(vo2, watt)) %>%
+  mutate(vo2.change = vo2_post - vo2_pre,
+         watt.change = watt_post - watt_pre,
+         vo2.per.change = (vo2.change/vo2_pre)*100,
+         watt.per.change = (watt.change/watt_pre)*100)%>%
+  
+  pivot_wider(names_from = period, values_from = vo2_post:watt.per.change) %>%
+  mutate(diff.change.vo2 = vo2.change_2 - vo2.change_1,
+         diff.change.watt = watt.change_2 - watt.change_1,
+         diff.pchange.vo2 = vo2.per.change_2 - vo2.per.change_1,
+         diff.pchange.watt = watt.per.change_2 - watt.per.change_1) %>%
+  select(id, test, vo2.change_1:diff.pchange.watt) %>%
+  print()
+  
+
+change.df.max <- change.df %>% 
+  filter(test == "max") %>% 
+  select(id, vo2.change_1:diff.pchange.watt) %>%
+  print()
+
+change.df.per <- change.df %>% 
+  filter(test == "per")%>% 
+  select(id, watt.change_1, watt.change_2, diff.change.watt, watt.per.change_1, watt.per.change_2, diff.pchange.watt) %>%
+  rename("diff.change.w15" = diff.change.watt,
+          "change.w15.1" = watt.change_1,
+         "change.w15.2 " = watt.change_2,
+         "p.diff.change.w15" = diff.pchange.watt,
+         "p.change.w15.1" = watt.per.change_1,
+         "p.change.w15.2" = watt.per.change_2) %>% 
+  print()
+
+combined.df.change <- right_join(change.df.max, change.df.per) %>% 
+  summarise(mean.vo2 = mean(diff.change.vo2),
+            sd.vo2 = sd(diff.change.vo2),
+            mean.wmax = mean(diff.change.watt),
+            sd.wmax = sd(diff.change.watt),
+            mean.w15 = mean(diff.change.w15),
+            sd.w15 = sd(diff.change.w15),
+            p.mean.vo2 = mean(diff.pchange.vo2),
+            p.sd.vo2 = sd(diff.pchange.vo2),
+            p.mean.wmax = mean(diff.pchange.watt),
+            p.sd.wmax = sd(diff.pchange.watt),
+            p.mean.w15 = mean(p.diff.change.w15),
+            p.sd.w15 = sd(p.diff.change.w15)) %>% 
+   mutate(
+     mean_sd.vo2 = paste0(round(mean.vo2, 2), " ± ", round(sd.vo2, 2)),
+     mean_sd.wmax = paste0(round(mean.wmax, 2), " ± ", round(sd.wmax, 2)),
+     mean_sd.w15 = paste0(round(mean.w15, 2), " ± ", round(sd.w15, 2)),
+     p.mean_sd.vo2 = paste0(round(p.mean.vo2, 2), " ± ", round(p.sd.vo2, 2)),
+     p.mean_sd.wmax = paste0(round(p.mean.wmax, 2), " ± ", round(p.sd.wmax, 2)),
+     p.mean_sd.w15 = paste0(round(p.mean.w15, 2), " ± ", round(p.sd.w15, 2))) %>%
+  select(mean_sd.vo2, mean_sd.wmax, mean_sd.w15, p.mean_sd.vo2, p.mean_sd.wmax, p.mean_sd.w15) %>% 
+  pivot_longer(
+    cols = c(mean_sd.vo2, mean_sd.wmax, mean_sd.w15, p.mean_sd.vo2, p.mean_sd.wmax, p.mean_sd.w15),
+    names_to = "variables",
+    values_to = "change.diff")
+combined.abs.df <- combined.df.change %>%
+  slice(1:3) %>% 
+   mutate(variables = c("vo2max",
+                       "wmax",
+                       "w15min")) %>% 
+  print()
+combined.per.df <- combined.df.change %>%
+  slice(4:6) %>% 
+   mutate(variables = c("vo2max",
+                       "wmax",
+                       "w15min")) %>% 
+  rename("per.change.diff" = change.diff) %>% 
+  print()
+
+comb.per.abs <- right_join(combined.abs.df, combined.per.df) %>% 
+  print()
+
+combined.change.te <- right_join(comb.per.abs, combined_cv)
+
+gt(combined.change.te)
+
+```
+
+
+
+
+```{r}
+#| echo: false
+
+combined.ci.df <- data.frame(
+  variables = c("vo2max", "wmax", "w15min"),
+  LowerCI = c(ci.df.vo2$LowerCI, ci.df.wmax$LowerCI, ci.df.w15$LowerCI),
+  UpperCI = c(ci.df.vo2$UpperCI, ci.df.wmax$UpperCI, ci.df.w15$UpperCI)) %>% 
+print()
+
+final.comb.group <- right_join(combined.change.te, combined.ci.df) %>% 
+  mutate("consistency.range" = (cv)*1.5) %>% 
+  select(variables, change.diff, per.change.diff,LowerCI, UpperCI,cv, consistency.range) %>% 
+  print()
+
+gt(final.comb.group)
+
+```
+
+
+
+
+
+
+
+```{r}
+# Perform the operations directly
+base_max_sum.2 <- final.data %>%  
+  select(id, timepoint, test, period, group, weight, height, age, vo2.kg, vo2, watt) %>%
+  filter(
+    period %in% c(1, 2),
+    test == "max", 
+    timepoint %in% c("pre", "post"),
+    !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+    !group %in% "control"
+  ) %>%
+  mutate(
+    wmaxkg = watt / weight
+  ) %>%
+  select(id, period, timepoint, weight, vo2.kg, vo2, watt, wmaxkg) %>% 
+pivot_wider(
+    names_from = timepoint,
+    values_from = c(weight, vo2.kg, vo2, watt, wmaxkg),
+    names_sep = "_") %>% 
+  group_by(period) %>% 
+  mutate(
+    change_weight = weight_post - weight_pre,
+    change_vo2kg = vo2.kg_post - vo2.kg_pre,
+    change_vo2 = vo2_post - vo2_pre,
+    change_watt = watt_post - watt_pre,
+    change_wmaxkg = wmaxkg_post - wmaxkg_pre)
+sumarize_change <- base_max_sum.2 %>% 
+  summarise(
+    weight = paste(round(mean(change_weight, na.rm = TRUE), 2), round(sd(change_weight, na.rm = TRUE), 2), sep = "±"),
+    vo2 = paste(round(mean(change_vo2, na.rm = TRUE), 2), round(sd(change_vo2, na.rm = TRUE), 2), sep = " ± "),
+    vo2kg = paste(round(mean(change_vo2kg, na.rm = TRUE), 2), round(sd(change_vo2kg, na.rm = TRUE), 2), sep = " ±"),
+    wmax = paste(round(mean(change_watt, na.rm = TRUE), 2), round(sd(change_watt, na.rm = TRUE), 2), sep = " ± "),
+    wmaxkg = paste(round(mean(change_wmaxkg, na.rm = TRUE), 2), round(sd(change_wmaxkg, na.rm = TRUE), 2), sep = " ± ")) %>%
+  pivot_longer(
+    names_to = "variables",
+    values_to = "values",
+    cols = weight:wmaxkg
+  ) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "p") %>% 
+  print()
+
+
+
+diff.change.max <- base_max_sum.2 %>% 
+  select(period, id, change_weight:change_wmaxkg) %>% 
+  pivot_wider(names_from = period, values_from = change_weight:change_wmaxkg) %>% 
+  mutate(change.diff.weight = change_weight_2 - change_weight_1,
+         change.diff.vo2 = change_vo2_2 - change_vo2_1,
+         change.diff.vo2kg = change_vo2kg_2 - change_vo2kg_1,
+         change.diff.wmax = change_watt_2 - change_watt_1,
+         change.diff.wmaxkg = change_wmaxkg_2 - change_wmaxkg_1) %>% 
+  summarise(
+    weight = paste(round(mean(change.diff.weight, na.rm = TRUE), 1), 
+                        round(sd(change.diff.weight, na.rm = TRUE), 1), sep = " ± "),
+    vo2 = paste(round(mean(change.diff.vo2, na.rm = TRUE), 1), 
+                     round(sd(change.diff.vo2, na.rm = TRUE), 1), sep = " ± "),
+    vo2kg = paste(round(mean(change.diff.vo2kg, na.rm = TRUE), 1), 
+                       round(sd(change.diff.vo2kg, na.rm = TRUE), 1), sep = " ± "),
+    wmax = paste(round(mean(change.diff.wmax, na.rm = TRUE), 1), 
+                      round(sd(change.diff.wmax, na.rm = TRUE), 1), sep = " ± "),
+    wmaxkg = paste(round(mean(change.diff.wmaxkg, na.rm = TRUE), 1), 
+                        round(sd(change.diff.wmaxkg, na.rm = TRUE), 1), sep = " ± ")) %>%
+  pivot_longer(
+    cols = everything(), # Select all columns to pivot longer
+    names_to = "variables", # Create a column for variable names
+    values_to = "values"    # Create a column for variable values
+  ) %>% 
+  print()
+  
+comb.max <- right_join(sumarize_change, diff.change.max) %>% 
+  print()
+
+```
+
+
+
+
+```{r}
+base_per_sum.2 <- final.data %>%  
+  select(id, timepoint, test, period, group, weight, watt, rel.vo2) %>%
+  filter(
+    period %in% c(1, 2),
+    test == "per", 
+    timepoint %in% c("pre", "post"),
+    !id %in% c(6, 11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+    !group %in% "control",
+  ) %>%
+  mutate(
+    w15minkg = watt / weight) %>%
+  select(id, period, timepoint, rel.vo2, watt, w15minkg) %>% 
+pivot_wider(
+    names_from = timepoint,
+    values_from = c(rel.vo2, watt, w15minkg),
+    names_sep = "_") %>% 
+  group_by(period) %>% 
+  mutate(
+    change_rel.vo2 = rel.vo2_post - rel.vo2_pre,
+    change_watt = watt_post - watt_pre,
+    change_w15minkg = w15minkg_post - w15minkg_pre) %>% 
+print()
+
+
+sumarize_change.per <- base_per_sum.2 %>% 
+  summarise(
+    rel.vo2 = paste(round(mean(change_rel.vo2, na.rm = TRUE), 2), round(sd(change_rel.vo2, na.rm = TRUE), 2), sep = " ± "),
+    w15min = paste(round(mean(change_watt, na.rm = TRUE), 2), round(sd(change_watt, na.rm = TRUE), 2), sep = " ± "),
+    w15minkg = paste(round(mean(change_w15minkg, na.rm = TRUE), 2), round(sd(change_w15minkg, na.rm = TRUE), 2), sep = " ± ")) %>%
+  pivot_longer(
+    names_to = "variables",
+    values_to = "values",
+    cols = rel.vo2:w15minkg
+  ) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "p") %>% 
+  print()
+
+
+
+diff.change.per <- base_per_sum.2 %>% 
+  select(period, id, change_rel.vo2:change_w15minkg) %>% 
+  pivot_wider(names_from = period, values_from = change_rel.vo2:change_w15minkg) %>% 
+  mutate(
+         change.diff.rel.vo2 = change_rel.vo2_2 - change_rel.vo2_1,
+         
+         change.diff.w15min = change_watt_2 - change_watt_1,
+         change.diff.w15minkg = change_w15minkg_2 - change_w15minkg_1) %>% 
+  summarise(
+    rel.vo2 = paste(round(mean(change.diff.rel.vo2, na.rm = TRUE), 1), 
+                     round(sd(change.diff.rel.vo2, na.rm = TRUE), 1), sep = " ± "),
+    w15min = paste(round(mean(change.diff.w15min, na.rm = TRUE), 1), 
+                      round(sd(change.diff.w15min, na.rm = TRUE), 1), sep = " ± "),
+    w15minkg = paste(round(mean(change.diff.w15minkg, na.rm = TRUE), 1), 
+                        round(sd(change.diff.w15minkg, na.rm = TRUE), 1), sep = " ± ")) %>%
+  pivot_longer(
+    cols = everything(), # Select all columns to pivot longer
+    names_to = "variables", # Create a column for variable names
+    values_to = "values"    # Create a column for variable values
+  ) %>% 
+  print()
+  
+comb.per <- right_join(sumarize_change.per, diff.change.per) %>% 
+  print()
+```
+
+
+```{r}
+
+base_sub_sum.2 <- final.data %>%  
+  select(id, timepoint, test, period, group, GE) %>%
+  filter(
+    period %in% c(1, 2),
+    test == "sub_40", 
+    timepoint %in% c("pre", "post"),
+    !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+    !group %in% "control",
+  ) %>%
+  select(id, period, timepoint, GE) %>% 
+pivot_wider(
+    names_from = timepoint,
+    values_from = GE,
+    names_sep = "_") %>% 
+  group_by(period) %>% 
+  mutate(
+    change_GE = post - pre) %>% 
+print()
+
+
+sumarize_change.sub <- base_sub_sum.2 %>% 
+  summarise(
+    GE = paste(round(mean(change_GE, na.rm = TRUE), 2), round(sd(change_GE, na.rm = TRUE), 2), sep = " ± ")) %>% 
+  pivot_longer(
+    names_to = "variables",
+    values_to = "values",
+    cols = GE
+  ) %>% 
+  pivot_wider(names_from = period, values_from = values, names_prefix = "p") %>% 
+  print()
+
+
+
+diff.change.sub <- base_sub_sum.2 %>% 
+  select(period, id, change_GE) %>% 
+  pivot_wider(names_from = period, values_from = change_GE, names_prefix = "per_") %>% 
+  mutate(
+         change.diff.GE = per_2 - per_1 ) %>% 
+  summarise(
+    GE = paste(round(mean(change.diff.GE, na.rm = TRUE), 1), 
+                     round(sd(change.diff.GE, na.rm = TRUE), 1), sep = " ± ")) %>% 
+  pivot_longer(
+    cols = everything(), # Select all columns to pivot longer
+    names_to = "variables", # Create a column for variable names
+    values_to = "values"    # Create a column for variable values
+  ) %>% 
+  print()
+  
+comb.sub <- right_join(sumarize_change.sub, diff.change.sub) %>% 
+  print()
+
+
+combined.diff.x <- bind_rows(comb.max, comb.per, comb.sub) %>% 
+  print()
+
+```
+
+
+
+```{r}
+baseline_wmax.2 <- final.data %>% 
+  ungroup() %>% 
+select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+
+
+  #Build to Model
+   
+  model.basewmax.2 <- lmer(watt ~ period + (1 | id), data = baseline_wmax.2)
+  summary(model.basewmax.2)
+  wmax.base.ci <- confint(model.basewmax.2)
+  
+  l.ci.baseline_wmax.2 <- wmax.base.ci[4, 1]
+  u.ci.baseline_wmax.2 <- wmax.base.ci[4, 2]
+  
+  ci.df.wmax <- data.frame(
+  LowerCI = l.ci.baseline_wmax.2,
+  UpperCI = u.ci.baseline_wmax.2) 
+  
+  CV.wmax <- cv.wmax$cv
+  TE.wmax <- cv.wmax$te
+
+baseline_wmax.2.change <- baseline_wmax.2 %>% 
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "pre_") %>% 
+  mutate(change = pre_2 - pre_1,
+         change.per = ((pre_2 - pre_1)/pre_1)*100) %>%
+  group_by() %>% 
+  summarise(mean.change = round(mean(change),2)) %>% 
+  mutate(group = "wmax") %>% 
+  print()
+  
+
+p.wmax.base.2 <- ggplot(baseline_wmax.2.change, aes(x = group, y = mean.change)) +
+  geom_point(size = 4, color = "blue") +  # Plot mean changes
+  geom_errorbar(aes(ymin = l.ci.baseline_wmax.2, ymax = u.ci.baseline_wmax.2), width = 0.1) +  # Add error bars using CI
+  geom_hline(yintercept = c(-1.5*(TE.wmax), 1.5*(TE.wmax)), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey") + # Add dashed lines at ±TE
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -1.5*(TE.wmax), ymax = 1.5*(TE.wmax)), fill = "grey", alpha = 0.2) +  # Grey shaded area
+  labs(y = "", x = "", title = expression(W[max])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-20, 20, by = 2), labels = seq(-20, 20, by = 2)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5))
+
+print(p.wmax.base.2)
+```
+
+
+
+```{r}
+baseline_w15.2 <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "per", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+
+
+# Build the Model
+
+model.basew15.2 <- lmer(watt ~ period + (1 | id), data = baseline_w15.2)
+summary(model.basew15.2)
+w15.base.ci <- confint(model.basew15.2)
+
+l.ci.baseline_w15.2 <- w15.base.ci[4, 1]
+u.ci.baseline_w15.2 <- w15.base.ci[4, 2]
+
+ci.df.w15 <- data.frame(
+  LowerCI = l.ci.baseline_w15.2,
+  UpperCI = u.ci.baseline_w15.2) 
+
+CV.w15.2 <- cv.w15$cv
+TE.w15.2 <- cv.w15$te
+
+baseline_w15.2.change <- baseline_w15.2 %>% 
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "pre_") %>% 
+  mutate(change = pre_2 - pre_1,
+         change.per = ((pre_2 - pre_1)/pre_1)*100) %>%
+  group_by() %>% 
+  summarise(mean.change = round(mean(change),2)) %>% 
+  mutate(group = "w15") %>% 
+  print()
+
+p.w15.base.2 <- ggplot(baseline_w15.2.change, aes(x = group, y = mean.change)) +
+  geom_point(size = 4, color = "blue") +  # Plot mean changes
+  geom_errorbar(aes(ymin = l.ci.baseline_w15.2, ymax = u.ci.baseline_w15.2), width = 0.1) +  # Add error bars using CI
+  geom_hline(yintercept = c(-1.5*(TE.w15.2), 1.5*(TE.w15.2)), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey") + # Add dashed lines at ±TE
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -1.5*(TE.w15.2), ymax = 1.5*(TE.w15.2)), fill = "grey", alpha = 0.2) +  # Grey shaded area
+  labs(y = "", x = "", title = expression(W[15][min])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-10, 10, by = 1), labels = seq(-10, 10, by = 1)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5))
+
+print(p.w15.base.2)
+
+```
+
+
+
+```{r}
+baseline_vo2.2 <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, vo2) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2) %>% 
+  rename(vo2 = pre) %>% 
+  print()
+
+# Build the Model
+
+model.basevo2.2 <- lmer(vo2 ~ period + (1 | id), data = baseline_vo2.2)
+summary(model.basevo2.2)
+vo2.base.ci <- confint(model.basevo2.2)
+
+l.ci.baseline_vo2.2 <- vo2.base.ci[4, 1]
+u.ci.baseline_vo2.2 <- vo2.base.ci[4, 2]
+
+ci.df.vo2 <- data.frame(
+  LowerCI = l.ci.baseline_vo2.2,
+  UpperCI = u.ci.baseline_vo2.2) 
+
+CV.vo2 <- cv.vo2$cv
+TE.vo2 <- cv.vo2$te
+
+baseline_vo2.2.change <- baseline_vo2.2 %>% 
+  pivot_wider(names_from = period, values_from = vo2, names_prefix = "pre_") %>% 
+  mutate(change = pre_2 - pre_1,
+         change.per = ((pre_2 - pre_1)/pre_1)*100) %>%
+  group_by() %>% 
+  summarise(mean.change = round(mean(change),2)) %>% 
+  mutate(group = "vo2") %>% 
+  print()
+  
+p.vo2.base.2 <- ggplot(baseline_vo2.2.change, aes(x = group, y = mean.change)) +
+  geom_point(size = 4, color = "blue") +  # Plot mean changes
+  geom_errorbar(aes(ymin = l.ci.baseline_vo2.2, ymax = u.ci.baseline_vo2.2), width = 0.1) +  # Add error bars using CI
+  geom_hline(yintercept = c(-1.5*(TE.vo2), 1.5*(TE.vo2)), linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "grey") + # Add dashed lines at ±TE
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -1.5*(TE.vo2), ymax = 1.5*(TE.vo2)), fill = "grey", alpha = 0.2) +  # Grey shaded area
+  labs(y = "", x = "", title = expression(VO[2][max])) +
+  theme_minimal() +
+  theme(aspect.ratio = 3/1) +
+  scale_y_continuous(breaks = seq(-140, 140, by = 20), labels = seq(-140, 140, by = 20)) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_blank(),
+    axis.text.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, vjust = 0.5))
+
+print(p.vo2.base.2)
+
+```
+```{r}
+
+
+comb.plot.base.2 <- plot_grid(p.vo2.base.2, p.wmax.base.2, p.w15.base.2, 
+                                labels = "AUTO",
+                              nrow = 1)
+print(comb.plot.base.2)
+
+ggsave(filename = "combined_plot.base.2.jpeg", 
+       plot = comb.plot.base.2, 
+       width = 210, height = 100, units = "mm")
+```
+
+
+
+
+```{r}
+## comnbine baseline plots
+
+comb.base.plot <- plot_grid(p.vo2.base.2, p.wmax.base.2, p.w15.base.2, b.vo2.plot, b.wmax.plot, b.w15.plot,
+                                labels = "AUTO",
+                            nrow = 2)
+                             
+print(comb.base.plot)
+
+ggsave(filename = "combined_baseplot.jpeg", 
+       plot = comb.base.plot, 
+       width = 210, height = 180, units = "mm")
+
+
+
+
+
+```
+
+
+##Baseline VO2/kg
+
+```{r}
+baseline_vo2kg <- final.data %>% 
+select(id, period, timepoint, test, vo2.kg) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2.kg) %>% 
+  rename(vo2.kg = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basevo2kg <- lmer(vo2.kg ~ period + (1 | id), data = baseline_vo2kg)
+  summary(model.basevo2kg)
+  confint(model.basevo2kg)
+  
+ ci.base.vo2kg <- confint(model.basevo2kg, level = 0.95)
+  print(ci.base.vo2kg)
+  
+##Calculate the ICC from the function above.
+  
+icc_value.vo2kg.b <- icc_fun(model.basevo2kg)
+
+## Calculate confident intervall from the ICC
+
+bo.basevo2kg <- bootMer(model.basevo2kg, icc_fun, nsim = 100)
+
+ci.vo2kg.b <- quantile(bo.basevo2kg$t, c(0.025, 0.975))
+ci.icc.upper.vo2kgb <- ci.vo2kg.b[2]
+ci.icc.lower.vo2kgb <- ci.vo2kg.b[1]
+
+## CV
+
+cv.vo2kg.b <- final.data %>% 
+  select(id, period, timepoint, test, vo2.kg) %>% 
+  filter(test == "max",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = vo2.kg, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+
+
+## create a datafram to calculate pearsons r
+
+df.basevo2kg.plot <- baseline_vo2kg %>%
+  filter(period %in% c(1, 2)) %>%
+  spread(key = period, value = vo2.kg) %>%
+  rename(Pre1 = '1', Pre2 = '2')
+
+# calculate pearsons r
+
+pearson_r.vo2kg.b <- cor(df.basevo2kg.plot$Pre1, df.basevo2kg.plot$Pre2)
+
+
+  
+ b.vo2kg.plot <- ggplot(df.basevo2kg.plot, aes(x = Pre1, y = Pre2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+    scale_x_continuous(limits = c(10, 50), breaks = seq(0, 50, by = 5), expand = c(0, 0),
+                       labels = function(x) ifelse(x == 10, 0, x)) +
+  scale_y_continuous(limits = c(10, 50), breaks = seq(0, 50, by = 5), expand = c(0, 0),
+                     labels = function(x) ifelse(x == 10, 0, x)) +
+   coord_fixed(ratio = 1) +
+  labs(x = "Pre1", y = "Pre2", title = expression(VO[2*max] (ml/kg/min))) +
+    # annotate("text", x = min(df.basevo2kg.plot$Pre1), y = max(df.basevo2kg.plot$Pre2) - 0, 
+    #         label = paste("ICC =", round(icc_value.vo2kg.b, 2),
+     #              "[", round(ci.icc.lower.vo2kgb, 2), "-", round(ci.icc.upper.vo2kgb, 2), "]"),
+      #         hjust = 0, vjust = 1) +
+    #annotate("text", x = min(df.basevo2kg.plot$Pre1), y = max(df.basevo2kg.plot$Pre2) - 2.5,
+     #       label = paste("CV =", round(cv.vo2kg.b$cv, 2)), hjust = 0, vjust = 1) +
+   theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"))
+ 
+ b.vo2kg.plot
+```
+

@@ -14,115 +14,19 @@ library(tidyverse)
 library(gt)
 library(lme4)
 library(irr)
+library(cowplot)
+library(psych)
+library(ggplot2)
+library(webshot2)
 
 data(final.data)
 data("cycling.data")
+data("hb.data")
 ```
 
-```{r}
-#### baseline values
-
-##Descriptive data from baseline 1 (Pre 1)
-
-base1 <- final.data %>% 
-select(id, timepoint, test, period, sex, weight, height, age, vo2.kg, rel.vo2, vo2, watt) %>% 
-  filter(period == 1, test == "max", timepoint == "pre", 
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  mutate(bmi = weight/(height/100)^2) %>% 
-  group_by() %>% 
- summarise( Weight = paste(round(mean(weight, na.rm = TRUE),2), 
-                        round(sd(weight, na.rm = TRUE),2), 
-                        sep = " ± "),
-           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
-                        round(sd(vo2.kg, na.rm = TRUE),2), 
-                        sep = " ± "),
-           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
-                        round(sd(vo2, na.rm = TRUE),2), 
-                        sep = " ± "),
-           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
-                        round(sd(watt, na.rm = TRUE),2), 
-                        sep = " ± ")) %>% 
-  pivot_longer(names_to = "variables",
-               values_to = "values",
-               cols = Weight:Wmax)
-##descriptive data from Baseline 2 (Pre 2)
-
-base1_2 <- final.data %>% 
-select(id, timepoint, test, period, sex, weight, vo2.kg, rel.vo2, vo2, watt) %>% 
-  filter(period == 2, test == "max", timepoint == "pre", 
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  group_by() %>% 
- summarise(Weight = paste(round(mean(weight, na.rm = TRUE),2), 
-                        round(sd(weight, na.rm = TRUE),2), 
-                        sep = " ± "),
-           rel.VO2max = paste(round(mean(vo2.kg, na.rm = TRUE),2), 
-                        round(sd(vo2.kg, na.rm = TRUE),2), 
-                        sep = " ± "),
-           VO2max = paste(round(mean(vo2, na.rm = TRUE),2), 
-                        round(sd(vo2, na.rm = TRUE),2), 
-                        sep = " ± "),
-           Wmax = paste(round(mean(watt, na.rm = TRUE),2), 
-                        round(sd(watt, na.rm = TRUE),2), 
-                        sep = " ± ")) %>% 
-  pivot_longer(names_to = "variables",
-               values_to = "values",
-               cols = Weight:Wmax)
-  
-merge <- base1 %>% 
-right_join(base1_2, base1, 
-               by = c("variables")) %>% 
-mutate(
-    variables = case_when(
-      variables == "rel.VO2max" ~ "VO2max (ml/kg/min)",
-      variables == "Weight" ~ "Body weight (kg)",
-      variables == "VO2max" ~ "VO2max (ml/min)",
-       variables == "Wmax" ~ "Wmax (watt)",
-      TRUE ~ variables))
-
-base.per1 <- final.data %>% 
- select(id, timepoint, test, period, watt) %>% 
-  filter(period %in% c(1), test == "per", timepoint == "pre",
-         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  group_by() %>% 
-  summarise(
-    variables = "W15min (watt)",
-    values = paste(round(mean(watt, na.rm = TRUE), 2), 
-                   round(sd(watt, na.rm = TRUE), 2), 
-                   sep = " ± ")) %>% 
-print()
-
-
-base.per2 <- final.data %>% 
- select(id, timepoint, test, period, watt) %>% 
-  filter(period %in% c(2), test == "per", timepoint == "pre",
-         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  group_by() %>% 
-  summarise(
-    variables = "W15min (watt)",
-    values = paste(round(mean(watt, na.rm = TRUE), 2), 
-                   round(sd(watt, na.rm = TRUE), 2), 
-                   sep = " ± "))
-  merge.per <- base.per1 %>% 
-right_join(base.per2, base.per1, 
-               by = c("variables")) %>% 
-  print()
-
-  
-final.base <- rbind(merge, merge.per) %>% 
-print()
-
-gt(final.base) %>% 
-cols_label(variables = "Variables",
-           values.x = "Period 1",
-           values.y = "period 2") %>% 
-  tab_header(title = "Baseline Characteristics")
-```
-
-
-
+## MAIN RESULTS FOR EACH VARIABLE
 
 ##mixed models (on change score) and ICC caluculations of the differet variables:
-
 
 ##VO2max (ml/min)
 
@@ -130,19 +34,22 @@ cols_label(variables = "Variables",
 ## Model a LMM that i can use to calculate ICC
 
 lmm_vo2 <- final.data %>% 
-select(id, period, timepoint, test, vo2) %>% 
+  ungroup() %>% 
+select(id, period, timepoint, test, group, vo2) %>% 
   filter(test == "max", 
          !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>% 
+         !period %in% (3),
+         !group %in% ("control")) %>% 
   pivot_wider(names_from = timepoint, values_from = vo2) %>% 
   mutate(change = post - pre) %>% 
-  print()
-  
+print()
+
+
 #Build to Model
    
   model.vo2 <- lmer(change ~ period + (1 | id), data = lmm_vo2)
   summary(model.vo2)
-  
+  confint(model.vo2)
   ## Create a function that i can use to calculate ICC from the model above
 ## ICC
   icc_fun <- function(x) {
@@ -151,487 +58,1021 @@ select(id, period, timepoint, test, vo2) %>%
     
     }
 
-##Calculate the ICC from the function above.
-  
-icc_fun(model.vo2)
-
-## Calculate confident intervall from the ICC
-
-bo.vo2 <- bootMer(model.vo2, icc_fun, nsim = 1000)
-
-ci.icc.vo2 <- quantile(bo.vo2$t, c(0.025, 0.975))
-ci_lower.vo2 <- round(ci.icc.vo2[1], 2)
-ci_upper.vo2 <- round(ci.icc.vo2[2], 2)
-
-## make a dataframe with ICC
-
-icc_value.vo2 <- icc_fun(model.vo2)
-
-## calculate pearsons r
-
-pearson_r.vo2 <- cor(plot_data.vo2$period_1, plot_data.vo2$period_2)
-
-## Calculate different measures of reliability
-
-
-cv.vo2 <- final.data %>% 
-  select(id, period, timepoint, test, vo2) %>% 
-  filter(test == "max",
-         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% 3) %>%
-  pivot_wider(names_from = timepoint, values_from = vo2, names_prefix = "timepoint_") %>% 
-  mutate(diff = timepoint_post - timepoint_pre) %>% 
-  select(id, period, diff) %>% 
-  pivot_wider(names_from = period, values_from = diff, names_prefix = "period_") %>% 
-  mutate(diff = period_2 - period_1) %>% 
-  group_by() %>% 
-  summarise(mean_diff = mean(diff, na.rm = TRUE),
-             mean = mean(c(period_1, period_2),na.rm = T),
-             sd_diff = sd(diff, na.rm = TRUE),
-             te = sd_diff / sqrt(2),
-             cv = (te / mean) * 100) %>% 
+## Calculate the ICC for VO2
+irr.icc.vo2 <- lmm_vo2 %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
   print()
 
+irr.icc.vo2.result <- icc(irr.icc.vo2, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.vo2.result)
+
+# Extract ICC and confidence intervals
+icc_value.vo2 <- irr.icc.vo2.result$value
+lower_ci.vo2 <- irr.icc.vo2.result$lbound
+upper_ci.vo2 <- irr.icc.vo2.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.vo2 <- data.frame(
+  icc.vo2 = paste0(
+    round(icc_value.vo2, 2), 
+    " [", round(lower_ci.vo2, 2), ", ", round(upper_ci.vo2, 2), "]"))
+
+# View the dataframe
+print(icc_df.vo2)
 
 
-## wrangle to make a plot
+## Calculate Pearson's r for VO2
 plot_data.vo2 <- lmm_vo2 %>%
   select(id, period, change) %>%
-  pivot_wider(names_from = period, values_from = change, names_prefix = "period_")
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.vo2  <- cor.test(plot_data.vo2$period_1, plot_data.vo2$period_2)
+
+# Extract Pearson's r and CI
+r.vo2 <- pearson_r.vo2$estimate
+ci.r.vo2 <- pearson_r.vo2$conf.int
+ci.r_lower.vo2 <- ci.r.vo2[1]
+ci.r_upper.vo2 <- ci.r.vo2[2]
+
+r.vo2_df <- data.frame(
+  r_ci.vo2 = paste0(
+    round(r.vo2, 2), 
+    " [", round(pearson_r.vo2$conf.int[1], 2), 
+    ", ", round(pearson_r.vo2$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.vo2_df)
+
+
+## Create a function to calculate CV
+
+calculate_cv <- function(data, variable, test_type, exclude_ids = c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) {
+  # Filter and reshape the data
+  cv_data <- data %>%
+    select(id, period, timepoint, test, group, all_of(variable)) %>%
+    filter(test == test_type,
+           !id %in% exclude_ids,
+           !period %in% 3,
+           !group %in% "control") %>%
+    pivot_wider(names_from = timepoint, values_from = all_of(variable), names_prefix = "timepoint_") %>%
+    mutate(diff = timepoint_post - timepoint_pre) %>%
+    select(id, period, diff) %>%
+    pivot_wider(names_from = period, values_from = diff, names_prefix = "period_") %>%
+    mutate(diff = period_2 - period_1) %>%
+    group_by() %>%
+    summarise(mean_diff = mean(diff, na.rm = TRUE),
+              mean = mean(c(period_1, period_2), na.rm = TRUE),
+              sd_diff = sd(diff, na.rm = TRUE),
+              te = sd_diff / sqrt(2),
+              cv = (te / mean) * 100)
+
+  return(cv_data)
+}
+
+cv.vo2.lmm <- calculate_cv(final.data, variable = "vo2", test_type = "max")
 
 
 
 # Create scatter plot with slope line
-ggplot(plot_data.vo2, aes(x = period_1, y = period_2)) +
+vo2.plot <- ggplot(plot_data.vo2, aes(x = period_1, y = period_2)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "red") +
-  labs(x = "Change in Period 1", y = "Change in Period 2", title = "Change in Period 1 vs. Period 2 with Regression Line") +
-  annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2), label = paste("ICC =", round(icc_value.vo2, 2),"[", ci_lower.vo2, "-", ci_upper.vo2, "]"), hjust = 0, vjust = 1) +
-   annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2) - 75, label = paste("r =", round(pearson_r.vo2, 2)), hjust = 0, vjust = 1) +
-  annotate("text", x = min(plot_data.vo2$period_1), y = max(plot_data.vo2$period_2) - 150, label = paste("CV =", round(cv.vo2$cv, 2)), hjust = 0, vjust = 1) +
-  theme_minimal()
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+ labs(
+  x = expression(atop("Period 1 "* Delta * " VO"[2][max], "(mL" %.% "min"^{-1} * ")")), 
+  y = expression(atop("Period 2 "* Delta * " VO"[2][max], "(mL" %.% "min"^{-1} * ")"))
+)+
 
 
-```
+  scale_x_continuous(limits = c(0, 600), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 600), expand = c(0, 0)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+
+vo2.plot
 
 
-
-
-```{r}
-lmm_wmax <- final.data %>% 
-select(id, period, timepoint, test, watt) %>% 
-  filter(test == "max", 
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>% 
-  pivot_wider(names_from = timepoint, values_from = watt) %>% 
-  mutate(change = post - pre) %>% 
-  print()
-  
-  #Build to Model
-   
-  model.wmax <- lmer(change ~ period + (1 | id), data = lmm_wmax)
-  summary(model.wmax)
-  
-icc_fun(model.wmax)
-
-## Calculate confident intervall from the ICC
-
-bo.wmax <- bootMer(model.wmax, icc_fun, nsim = 1000)
-
-quantile(bo.wmax$t, c(0.025, 0.975))
-```
-
-## W15min
-
-```{r}
-lmm_w15 <- final.data %>% 
-select(id, period, timepoint, test, watt) %>% 
-  filter(test == "per", 
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>% 
-  pivot_wider(names_from = timepoint, values_from = watt) %>% 
-  mutate(change = post - pre) %>% 
-  print()
-  
-  #Build to Model
-   
-  model.w15 <- lmer(change ~ period + (1 | id), data = lmm_w15)
-  summary(model.w15)
-  
-icc_fun(model.w15)
-
-## Calculate confident intervall from the ICC
-
-bo.w15 <- bootMer(model.w15, icc_fun, nsim = 1000)
-
-quantile(bo.w15$t, c(0.025, 0.975))
+t.vo2.plot <- ggdraw() +
+  draw_plot(vo2.plot) +
+  draw_label(paste("ICC =", round(icc_value.vo2, 2),
+                   "[", lower_ci.vo2, "-", upper_ci.vo2, "]"), 
+             x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.vo2, 2), 
+                         "[", round(ci.r_lower.vo2, 2), "-", round(ci.r_upper.vo2, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.vo2.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+             
+t.vo2.plot
 ```
 
 
 ## VO2(ml/kg/min)
 
-
 ```{r}
 lmm_vo2kg <- final.data %>% 
-select(id, period, timepoint, test, vo2.kg) %>% 
+select(id, period, timepoint, test, group, vo2.kg) %>% 
   filter(test == "max", 
          !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>% 
+         !period %in% (3),
+         !group %in% ("control")) %>% 
   pivot_wider(names_from = timepoint, values_from = vo2.kg) %>% 
   mutate(change = post - pre) %>% 
   print()
   
+
   #Build to Model
    
   model.vo2kg <- lmer(change ~ period + (1 | id), data = lmm_vo2kg)
   summary(model.vo2kg)
   
-icc_fun(model.vo2kg)
+# Change all references from rel.vo2 to vo2kg
 
-## Calculate confident intervall from the ICC
+irr.icc.vo2kg <- lmm_vo2kg %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
 
-bo.vo2kg <- bootMer(model.vo2kg, icc_fun, nsim = 1000)
+irr.icc.vo2kg.result <- icc(irr.icc.vo2kg, model = "twoway", type = "agreement", unit = "single")
 
-quantile(bo.vo2kg$t, c(0.025, 0.975))
+# Extract ICC and confidence intervals
+icc_value.vo2kg <- irr.icc.vo2kg.result$value
+lower_ci.vo2kg <- irr.icc.vo2kg.result$lbound
+upper_ci.vo2kg <- irr.icc.vo2kg.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.vo2kg <- data.frame( 
+  icc.vo2kg = paste0(
+    round(icc_value.vo2kg, 2), 
+    " [", round(lower_ci.vo2kg, 2), 
+    ", ", round(upper_ci.vo2kg, 2), "]"))
+print(icc_df.vo2kg)
+
+# View the dataframe
+print(icc_df.vo2kg)
+
+## Calculate Pearson's r
+
+plot_data.vo2kg <- lmm_vo2kg %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.vo2kg  <- cor.test(plot_data.vo2kg$period_1, plot_data.vo2kg$period_2)
+
+# Extract Pearson's correlation coefficient
+r.vo2kg <- pearson_r.vo2kg$estimate
+
+# Extract confidence interval
+ci.r.vo2kg <- pearson_r.vo2kg$conf.int
+ci.r_lower.vo2kg <- ci.r.vo2kg[1]
+ci.r_upper.vo2kg <- ci.r.vo2kg[2]
+
+r.vo2kg_df <- data.frame( 
+  r_ci.vo2kg = paste0(
+    round(r.vo2kg, 2), 
+    " [", round(pearson_r.vo2kg$conf.int[1], 2), 
+    ", ", round(pearson_r.vo2kg$conf.int[2], 2), "]"))
+print(r.vo2kg_df)
+
+
+
+cv.vo2kg.lmm <- calculate_cv(final.data, variable = "vo2.kg", test_type = "max")
+
+
+
+# Create scatter plot with slope line
+vo2kg.plot <- ggplot(plot_data.vo2kg, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+   labs(
+  x = expression(atop("Period 1" * Delta * " VO"[2][max], "(mL"%.%"kg"^-1 %.%"min"^-1*")")),
+  y = expression(atop("Period 2" * Delta * " VO"[2][max], "(mL"%.%"kg"^-1 %.%"min"^-1*")"))) +
+  scale_x_continuous(limits = c(0, 8), expand = c(0, 0), breaks = seq(0, 8, 1)) +
+  scale_y_continuous(limits = c(0, 8), expand = c(0, 0), breaks = seq(0, 8, 1)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+     axis.text = element_text(size = 12))
+
+vo2kg.plot
+
+t.vo2kg.plot <- ggdraw() +
+  draw_plot(vo2kg.plot) +
+  draw_label(paste("ICC =", round(icc_value.vo2kg, 2),
+                   "[", round(lower_ci.vo2kg, 2), "-", round(upper_ci.vo2kg, 2), "]"), 
+             x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.vo2kg, 2), 
+                         "[", round(ci.r_lower.vo2kg, 2), "-", round(ci.r_upper.vo2kg, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.vo2kg.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+             
+print(t.vo2kg.plot)
+
+
 ```
 
-## kroppsvekt
+
+
+
+## wmax
+
+```{r}
+lmm_wmax <- final.data %>% 
+select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+
+
+  #Build to Model
+   
+  model.wmax <- lmer(change ~ period + (1 | id), data = lmm_wmax)
+  summary(model.wmax)
+  ci.lmm.wmax <- confint(model.wmax)
+  l.ci.lmm.wmax <- ci.lmm.wmax[4, 1]
+  u.ci.lmm.wmax <- ci.lmm.wmax[4, 2]
+  
+## Calculate the ICC for Wmax
+irr.icc.wmax <- lmm_wmax %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.wmax.result <- icc(irr.icc.wmax, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.wmax.result)
+
+# Extract ICC and confidence intervals
+icc_value.wmax <- irr.icc.wmax.result$value
+lower_ci.wmax <- irr.icc.wmax.result$lbound
+upper_ci.wmax <- irr.icc.wmax.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.wmax <- data.frame(
+  icc.wmax = paste0(
+    round(icc_value.wmax, 2), 
+    " [", round(lower_ci.wmax, 2), ", ", round(upper_ci.wmax, 2), "]"))
+
+# View the dataframe
+print(icc_df.wmax)
+
+
+## Calculate Pearson's r for Wmax
+plot_data.wmax <- lmm_wmax %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.wmax <- cor.test(plot_data.wmax$period_1, plot_data.wmax$period_2)
+
+# Extract Pearson's r and CI
+r.wmax <- pearson_r.wmax$estimate
+ci.r.wmax <- pearson_r.wmax$conf.int
+ci.r_lower.wmax <- ci.r.wmax[1]
+ci.r_upper.wmax <- ci.r.wmax[2]
+
+r.wmax_df <- data.frame(
+  r_ci.wmax = paste0(
+    round(r.wmax, 2), 
+    " [", round(pearson_r.wmax$conf.int[1], 2), 
+    ", ", round(pearson_r.wmax$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.wmax_df)
+
+
+cv.wmax.lmm <- calculate_cv(final.data, variable = "watt", test_type = "max")
+
+
+
+# Create scatter plot with slope line
+wmax.plot <- ggplot(plot_data.wmax, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+ labs(x = expression(atop("Period 1 " * Delta * " W"[max], "(watt)")), 
+     y = expression(atop("Period 2 " * Delta * " W"[max], "(watt)"))) +
+  scale_x_continuous(limits = c(0, 70), breaks = seq(0, 70, by = 10), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 70), breaks = seq(0, 70, by = 10), expand = c(0, 0)) +
+   coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+wmax.plot
+
+t.wmax.plot <- ggdraw() +
+  draw_plot(wmax.plot) +
+  draw_label(paste("ICC =", round(icc_value.wmax, 2),
+                   "[", lower_ci.wmax, "-", upper_ci.wmax, "]"), 
+             x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.wmax, 2), 
+                         "[", round(ci.r_lower.wmax, 2), "-", round(ci.r_upper.wmax, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.wmax.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+             
+  
+
+print(t.wmax.plot)
+```
+
+
+```{r}
+# Change all references from w15kg to wmaxkg
+
+lmm_wmaxkg <- final.data %>% 
+  select(id, period, timepoint, test, group, weight, watt) %>% 
+  filter(test == "max", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  mutate(wmaxkg = watt/weight) %>% 
+  select(id, period, timepoint, test, wmaxkg) %>% 
+  pivot_wider(names_from = timepoint, values_from = wmaxkg) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+  # Build the Model
+
+  model.wmaxkg <- lmer(change ~ period + (1 | id), data = lmm_wmaxkg)
+  summary(model.wmaxkg)
+  confint(model.wmaxkg)
+  
+  # ICC Calculation for wmaxkg
+
+irr.icc.wmaxkg <- lmm_wmaxkg %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.wmaxkg.result <- icc(irr.icc.wmaxkg, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.wmaxkg.result)
+
+# Extract ICC and confidence intervals
+icc_value.wmaxkg <- irr.icc.wmaxkg.result$value
+lower_ci.wmaxkg <- irr.icc.wmaxkg.result$lbound
+upper_ci.wmaxkg <- irr.icc.wmaxkg.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.wmaxkg <- data.frame(
+  icc.wmaxkg = paste0(
+    round(icc_value.wmaxkg, 2), 
+    " [", round(lower_ci.wmaxkg, 2), ", ", round(upper_ci.wmaxkg, 2), "]"))
+
+# View the dataframe
+print(icc_df.wmaxkg)
+
+
+## Calculate Pearson's r for wmaxkg
+
+plot_data.wmaxkg <- lmm_wmaxkg %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.wmaxkg  <- cor.test(plot_data.wmaxkg$period_1, plot_data.wmaxkg$period_2)
+
+# Extract Pearson's r and CI
+r.wmaxkg <- pearson_r.wmaxkg$estimate
+ci.r.wmaxkg <- pearson_r.wmaxkg$conf.int
+ci.r_lower.wmaxkg <- ci.r.wmaxkg[1]
+ci.r_upper.wmaxkg <- ci.r.wmaxkg[2]
+
+r.wmaxkg_df <- data.frame(
+  r_ci.waxkg = paste0(
+    round(r.wmaxkg, 2), 
+    " [", round(pearson_r.wmaxkg$conf.int[1], 2), 
+    ", ", round(pearson_r.wmaxkg$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.wmaxkg_df)
+
+wmaxkg.plot <- ggplot(plot_data.wmaxkg, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "blue") +
+  labs(
+  x = expression(atop("Period 1 " * Delta * " W"[max], "(W"%.%"kg"^-1*")")), 
+  y = expression(atop("Period 2 " * Delta * " W"[max], "(W"%.%"kg"^-1*")"))) +
+  scale_x_continuous(limits = c(-0.1, 0.8), expand = c(0, 0), breaks = seq(-0.1, 0.8, 0.2)) +
+  scale_y_continuous(limits = c(-0.1, 0.8), expand = c(0, 0), breaks = seq(-0.1, 0.8, 0.2)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+
+wmaxkg.plot
+
+
+
+
+```
+
+
+
+
+
+## W15min
+
+```{r}
+lmm_w15 <- final.data %>% 
+select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "per", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+
+
+  #Build to Model
+   
+  model.w15 <- lmer(change ~ period + (1 | id), data = lmm_w15)
+  summary(model.w15)
+  confint(model.w15)
+  
+  
+  ## ICC Calculation for w15
+
+irr.icc.w15 <- lmm_w15 %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.w15.result <- icc(irr.icc.w15, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.w15.result)
+
+# Extract ICC and confidence intervals
+icc_value.w15 <- irr.icc.w15.result$value
+lower_ci.w15 <- irr.icc.w15.result$lbound
+upper_ci.w15 <- irr.icc.w15.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.w15 <- data.frame(
+  icc.w15 = paste0(
+    round(icc_value.w15, 2), 
+    " [", round(lower_ci.w15, 2), ", ", round(upper_ci.w15, 2), "]"))
+
+# View the dataframe
+print(icc_df.w15)
+
+
+## Calculate Pearson's r for w15
+
+plot_data.w15 <- lmm_w15 %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.w15 <- cor.test(plot_data.w15$period_1, plot_data.w15$period_2)
+
+# Extract Pearson's r and CI
+r.w15 <- pearson_r.w15$estimate
+ci.r.w15 <- pearson_r.w15$conf.int
+ci.r_lower.w15 <- ci.r.w15[1]
+ci.r_upper.w15 <- ci.r.w15[2]
+
+r.w15_df <- data.frame(
+  r_ci.w15 = paste0(
+    round(r.w15, 2), 
+    " [", round(pearson_r.w15$conf.int[1], 2), 
+    ", ", round(pearson_r.w15$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.w15_df)
+
+
+
+cv.w15.lmm <- calculate_cv(final.data, variable = "watt", test_type = "per")
+
+
+
+# Create scatter plot with slope line
+w15.plot <- ggplot(plot_data.w15, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+ labs(x = expression(atop("Period 1 " * Delta * " W"[15][min], "(watt)")), 
+     y = expression(atop("Period 2 " * Delta * " W"[15][min], "(watt)"))) +
+  scale_x_continuous(limits = c(-10, 60),  breaks = seq(-10, 60, by = 10), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-10, 60), breaks = seq(-10, 60, by = 10), expand = c(0, 0)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+w15.plot
+
+t.w15.plot <- ggdraw() +
+  draw_plot(w15.plot) +
+  draw_label(paste("ICC =", round(icc_value.w15, 2),
+                   "[", lower_ci.w15, "-", upper_ci.w15, "]"), 
+             x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.w15, 2), 
+                         "[", round(ci.r_lower.w15, 2), "-", round(ci.r_upper.w15, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.w15.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+
+print(t.w15.plot)
+
+
+```
+
+
+
+```{r}
+lmm_w15kg <- final.data %>% 
+select(id, period, timepoint, test, group, weight, watt) %>% 
+  filter(test == "per", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  mutate(w15kg = watt/weight) %>% 
+  select(id, period, timepoint, test, w15kg) %>% 
+  pivot_wider(names_from = timepoint, values_from = w15kg) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+
+
+ model.w15kg <- lmer(change ~ period + (1 | id), data = lmm_w15kg)
+  summary(model.w15kg)
+  confint(model.w15kg)
+  
+
+irr.icc.w15kg <- lmm_w15kg %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.w15kg.result <- icc(irr.icc.w15kg, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.w15kg.result)
+
+# Extract ICC and confidence intervals
+icc_value.w15kg <- irr.icc.w15kg.result$value
+lower_ci.w15kg <- irr.icc.w15kg.result$lbound
+upper_ci.w15kg <- irr.icc.w15kg.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.w15kg <- data.frame(
+  icc.w15kg = paste0(
+    round(icc_value.w15kg, 2), 
+    " [", round(lower_ci.w15kg, 2), ", ", round(upper_ci.w15kg, 2), "]"))
+
+# View the dataframe
+print(icc_df.w15kg)
+
+## Calculate Pearson's r for w15kg
+
+plot_data.w15kg <- lmm_w15kg %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.w15kg  <- cor.test(plot_data.w15kg$period_1, plot_data.w15kg$period_2)
+
+# Extract Pearson's r and CI
+r.w15kg <- pearson_r.w15kg$estimate
+ci.r.w15kg <- pearson_r.w15kg$conf.int
+ci.r_lower.w15kg <- ci.r.w15kg[1]
+ci.r_upper.w15kg <- ci.r.w15kg[2]
+
+r.w15kg_df <- data.frame(
+  r_ci.w15kg = paste0(
+    round(r.w15kg, 2), 
+    " [", round(pearson_r.w15kg$conf.int[1], 2), 
+    ", ", round(pearson_r.w15kg$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.w15kg_df)
+
+w15kg.plot <- ggplot(plot_data.w15kg, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "blue") +
+  labs(x = expression(atop("Period 1 " * Delta * " W"[15][min], "(W"%.%"kg"^-1*")")), 
+     y = expression(atop("Period 2 " * Delta * " W"[15][min], "(W"%.%"kg"^-1*")"))) +
+  scale_x_continuous(limits = c(-0.3, 0.8), expand = c(0, 0), breaks = seq(-0.1, 0.8, 0.2)) +
+  scale_y_continuous(limits = c(-0.3, 0.8), expand = c(0, 0), breaks = seq(-0.1, 0.8, 0.2)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+
+w15kg.plot
+
+
+```
+
+
+
+
+```{r}
+lmm_rel.vo2 <- final.data %>% 
+select(id, period, timepoint, test, group, rel.vo2) %>% 
+  filter(test == "per", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  pivot_wider(names_from = timepoint, values_from = rel.vo2) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+
+  #Build to Model
+   
+  model.rel.vo2 <- lmer(change ~ period + (1 | id), data = lmm_rel.vo2)
+  summary(model.rel.vo2)
+  
+irr.icc.rel.vo2 <- lmm_rel.vo2 %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.rel.vo2.result <- icc(irr.icc.rel.vo2, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.rel.vo2.result)
+
+# Extract ICC and confidence intervals
+icc_value.rel.vo2 <- irr.icc.rel.vo2.result$value
+lower_ci.rel.vo2 <- irr.icc.rel.vo2.result$lbound
+upper_ci.rel.vo2 <- irr.icc.rel.vo2.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.rel.vo2 <- data.frame(
+  CI.rel.vo2 = paste0(
+    round(icc_value.rel.vo2, 2), 
+    " [", round(lower_ci.rel.vo2, 2), ", ", round(upper_ci.rel.vo2, 2), "]"))
+
+# View the dataframe
+print(icc_df.rel.vo2)
+
+## Calculate Pearson's r for rel.vo2
+
+plot_data.rel.vo2 <- lmm_rel.vo2 %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.rel.vo2  <- cor.test(plot_data.rel.vo2$period_1, plot_data.rel.vo2$period_2)
+
+# Extract Pearson's r and CI
+r.rel.vo2 <- pearson_r.rel.vo2$estimate
+ci.r.rel.vo2 <- pearson_r.rel.vo2$conf.int
+ci.r_lower.rel.vo2 <- ci.r.rel.vo2[1]
+ci.r_upper.rel.vo2 <- ci.r.rel.vo2[2]
+
+r.rel.vo2_df <- data.frame(
+  r_ci.rel.vo2 = paste0(
+    round(r.rel.vo2, 2), 
+    " [", round(pearson_r.rel.vo2$conf.int[1], 2), 
+    ", ", round(pearson_r.rel.vo2$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.rel.vo2_df)
+
+
+cv.rel.vo2.lmm <- final.data %>% 
+  select(id, period, timepoint, test, group, rel.vo2) %>% 
+    filter(test == "per",
+           !id %in% c(6, 11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+           !period %in% (3),
+           !group %in% ("control")) %>%
+    pivot_wider(names_from = timepoint, values_from = rel.vo2, names_prefix = "timepoint_") %>%
+    mutate(diff = timepoint_post - timepoint_pre) %>%
+    select(id, period, diff) %>%
+    pivot_wider(names_from = period, values_from = diff, names_prefix = "period_") %>%
+    mutate(diff = period_2 - period_1) %>%
+    group_by() %>%
+    summarise(mean_diff = mean(diff, na.rm = TRUE),
+              mean = mean(c(period_1, period_2), na.rm = TRUE),
+              sd_diff = sd(diff, na.rm = TRUE),
+              te = sd_diff / sqrt(2),
+              cv = (te / mean) * 100) %>% 
+  print()
+
+
+
+# Create scatter plot with slope line
+rel.vo2.plot <- ggplot(plot_data.rel.vo2, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "blue") +
+   labs(
+  x = expression(atop("Period 1" * Delta * "%VO"[2]["@15min"], "(%)")), 
+  y = expression(atop("Period 2" * Delta * "%VO"[2]["@15min"], "(%)"))
+) +
+  scale_x_continuous(limits = c(-10, 10), expand = c(0, 0), breaks = seq(-10, 10, 2)) +
+  scale_y_continuous(limits = c(-10, 10), expand = c(0, 0), breaks = seq(-10, 10, 2)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"))
+
+rel.vo2.plot
+
+t.rel.vo2.plot <- ggdraw() +
+  draw_plot(rel.vo2.plot) +
+  draw_label(paste("ICC =", round(icc_value.rel.vo2, 2),
+                   "[", round(lower_ci.rel.vo2, 2), "-", round(upper_ci.rel.vo2, 2),"]"), 
+             x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.rel.vo2, 2), 
+                         "[", round(ci.r_lower.rel.vo2, 2), "-", round(ci.r_upper.rel.vo2, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.rel.vo2.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+             
+print(t.rel.vo2.plot)
+
+```
+
+```{r}
+lmm_GE40 <- final.data %>% 
+select(id, period, timepoint, test, group, GE) %>% 
+  filter(test == "sub_40", 
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 49, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  pivot_wider(names_from = timepoint, values_from = GE) %>% 
+  mutate(change = post - pre) %>% 
+  print()
+  
+
+  #Build to Model
+   
+  model.GE40 <- lmer(change ~ period + (1 | id), data = lmm_GE40)
+  summary(model.GE40)
+  
+irr.icc.GE40 <- lmm_GE40 %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.GE40.result <- icc(irr.icc.GE40, model = "twoway", type = "agreement", unit = "single")
+
+# View the ICC result
+print(irr.icc.GE40.result)
+
+# Extract ICC and confidence intervals
+icc_value.GE40 <- irr.icc.GE40.result$value
+lower_ci.GE40 <- irr.icc.GE40.result$lbound
+upper_ci.GE40 <- irr.icc.GE40.result$ubound
+
+# Create a dataframe with renamed columns
+icc_df.GE40 <- data.frame(
+  CI.GE40 = paste0(
+    round(icc_value.GE40, 2), 
+    " [", round(lower_ci.GE40, 2), ", ", round(upper_ci.GE40, 2), "]"))
+
+# View the dataframe
+print(icc_df.GE40)
+
+## Calculate Pearson's r for GE40
+
+plot_data.GE40 <- lmm_GE40 %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
+  print()
+
+pearson_r.GE40  <- cor.test(plot_data.GE40$period_1, plot_data.GE40$period_2)
+
+# Extract Pearson's r and CI
+r.GE40 <- pearson_r.GE40$estimate
+ci.r.GE40 <- pearson_r.GE40$conf.int
+ci.r_lower.GE40 <- ci.r.GE40[1]
+ci.r_upper.GE40 <- ci.r.GE40[2]
+
+r.GE40_df <- data.frame(
+  r_ci.GE40 = paste0(
+    round(r.GE40, 2), 
+    " [", round(pearson_r.GE40$conf.int[1], 2), 
+    ", ", round(pearson_r.GE40$conf.int[2], 2), "]"))
+
+# View the dataframe
+print(r.GE40_df)
+
+
+
+cv.GE40.lmm <- calculate_cv(final.data, variable = "GE", test_type = "sub_40")
+
+
+# Create scatter plot with slope line
+GE40.plot <- ggplot(plot_data.GE40, aes(x = period_1, y = period_2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F, color = "blue") +
+labs(
+  x = expression(atop("Period 1" * Delta * "GE"["@sub40"], " (%)")), 
+  y = expression(atop("Period 2" * Delta * "GE"["@sub40"], " (%)"))
+) +
+  scale_x_continuous(limits = c(-1, 2), expand = c(0, 0), breaks = seq(-1, 2, 0.5)) +
+  scale_y_continuous(limits = c(-1, 2), expand = c(0, 0), breaks = seq(-1, 2, 0.5)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"))
+
+GE40.plot
+
+t.GE40.plot <- ggdraw() +
+  draw_plot(GE40.plot) +
+  draw_label(paste("ICC =", round(icc_value.GE40, 2),
+                 "[", round(lower_ci.GE40, 2), "-", round(upper_ci.GE40, 2), "]"), 
+           x = 0.3, y = 0.9, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("r =", round(r.GE40, 2), 
+                         "[", round(ci.r_lower.GE40, 2), "-", round(ci.r_upper.GE40, 2), "]"),
+              x = 0.3, y = 0.85, hjust = 0, size = 8, color = "black") +
+  draw_label(paste("CV =", round(cv.GE40.lmm$cv, 2)),
+                   x = 0.3, y = 0.80, hjust = 0, size = 8, color = "black")
+             
+print(t.GE40.plot)
+
+
+
+```
+
+
+
 
 ```{r}
 lmm_weight <- final.data %>% 
-select(id, period, timepoint, test, weight) %>% 
+  select(id, period, timepoint, test, group, weight) %>% 
   filter(test == "max", 
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>% 
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>% 
+  select(id, period, timepoint, test, weight) %>% 
   pivot_wider(names_from = timepoint, values_from = weight) %>% 
   mutate(change = post - pre) %>% 
   print()
   
-  #Build to Model
-   
+  # Build the Model
+
   model.weight <- lmer(change ~ period + (1 | id), data = lmm_weight)
   summary(model.weight)
+  confint(model.weight)
   
-icc_fun(model.weight)
-
-## Calculate confident intervall from the ICC
-
-bo.weight <- bootMer(model.weight, icc_fun, nsim = 1000)
-
-quantile(bo.weight$t, c(0.025, 0.975))
-```
-
-
-
-
-
-##Baseline tests with LMM and ICC
-## Baseline W15min
-```{r}
-baseline_w15 <- final.data %>% 
-select(id, period, timepoint, test, watt) %>% 
-  filter(test == "per", 
-         timepoint == "pre",  
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>%
-  pivot_wider(names_from = timepoint, values_from = watt) %>% 
-  rename(watt = pre) %>% 
+  
+  irr.icc.weight <- lmm_weight %>% 
+  select(id, period, change) %>% 
+  pivot_wider(names_from = period, values_from = change, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
   print()
-  
-  #Build to Model
-   
-  model.basew15 <- lmer(watt ~ period + (1 | id), data = baseline_w15)
-  summary(model.basew15)
-  
-##Calculate the ICC from the function above.
-  
-icc_fun(model.basew15)
 
-## Calculate confident intervall from the ICC
+irr.icc.weight.result <- icc(irr.icc.weight, model = "twoway", type = "agreement", unit = "single")
 
-bo.basew15 <- bootMer(model.basew15, icc_fun, nsim = 1000)
+# View the ICC result
+print(irr.icc.weight.result)
 
-quantile(bo.basew15$t, c(0.025, 0.975))
+# Extract ICC and confidence intervals
+icc_value.weight <- irr.icc.weight.result$value
+lower_ci.weight <- irr.icc.weight.result$lbound
+upper_ci.weight <- irr.icc.weight.result$ubound
 
-```
+# Create a dataframe with renamed columns
+icc_df.weight <- data.frame(
+  icc.weight = paste0(
+    round(icc_value.weight, 2), 
+    " [", round(lower_ci.weight, 2), ", ", round(upper_ci.weight, 2), "]"))
 
-### Baseline VO2(ml/min)
-```{r}
-baseline_vo2 <- final.data %>% 
-select(id, period, timepoint, test, vo2) %>% 
-  filter(test == "max", 
-         timepoint == "pre",  
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>%
-  pivot_wider(names_from = timepoint, values_from = vo2) %>% 
-  rename(vo2 = pre) %>% 
+# View the dataframe
+print(icc_df.weight)
+
+
+## Calculate Pearson's r for weight
+
+plot_data.weight <- lmm_weight %>%
+  select(id, period, change) %>%
+  pivot_wider(names_from = period, values_from = change, names_prefix = "period_") %>% 
   print()
-  
-  #Build to Model
-   
-  model.basevo2 <- lmer(vo2 ~ period + (1 | id), data = baseline_vo2)
-  summary(model.basevo2)
-  
-##Calculate the ICC from the function above.
-  
-icc_fun(model.basevo2)
 
-## Calculate confident intervall from the ICC
+pearson_r.weight  <- cor.test(plot_data.weight$period_1, plot_data.weight$period_2)
 
-bo.basevo2 <- bootMer(model.basevo2, icc_fun, nsim = 1000)
+# Extract Pearson's r and CI
+r.weight <- pearson_r.weight$estimate
+ci.r.weight <- pearson_r.weight$conf.int
+ci.r_lower.weight <- ci.r.weight[1]
+ci.r_upper.weight <- ci.r.weight[2]
 
-quantile(bo.basevo2$t, c(0.025, 0.975))
+r.weight_df <- data.frame(
+  r_ci.weight = paste0(
+    round(r.weight, 2), 
+    " [", round(pearson_r.weight$conf.int[1], 2), 
+    ", ", round(pearson_r.weight$conf.int[2], 2), "]"))
 
-
-
-
-df.vo2.plot <- baseline_vo2 %>%
-  filter(period %in% c(1, 2)) %>%
-  spread(key = period, value = vo2) %>%
-  rename(Pre1 = '1', Pre2 = '2')
+# View the dataframe
+print(r.weight_df)
 
 
-icc_value.vo2.b <- icc_fun(model.basevo2)
-
-pearson_r.vo2.b <- cor(df.vo2.plot$Pre1, df.vo2.plot$Pre2)
-
-
-  
-  ggplot(df.vo2.plot, aes(x = Pre1, y = Pre2)) +
+weight.plot <- ggplot(plot_data.weight, aes(x = period_1, y = period_2)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  labs(x = "Pre1", y = "Pre2", title = "Pre1 vs Pre2 with Linear Regression Line") +
-     annotate("text", x = min(df.vo2.plot$Pre1), y = max(df.vo2.plot$Pre2) - 500, 
-              label = paste("ICC =", round(icc_value.vo2.b, 2)), hjust = 0, vjust = 1) +
-     annotate("text", x = min(df.vo2.plot$Pre1), y = max(df.vo2.plot$Pre2)  - 250, 
-              label = paste("Pearson's r =", round(pearson_r.vo2.b, 2)), hjust = 0, vjust = 1) +
-     theme_minimal()
+  geom_smooth(method = "lm", se = F, color = "blue") +
+   labs(x = "change in weight P1", 
+       y = "change in weight P2") +
+  scale_x_continuous(limits = c(-9, 3), expand = c(0, 0), breaks = seq(-9, 3, 1)) +
+  scale_y_continuous(limits = c(-9, 3), expand = c(0, 0), breaks = seq(-9, 3, 1)) + 
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"))
+
+weight.plot
+
+
 ```
 
 
-
-##Baseline VO2/kg
 
 ```{r}
-baseline_vo2kg <- final.data %>% 
-select(id, period, timepoint, test, vo2.kg) %>% 
-  filter(test == "max", 
-         timepoint == "pre",  
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>%
-  pivot_wider(names_from = timepoint, values_from = vo2.kg) %>% 
-  rename(vo2.kg = pre) %>% 
-  print()
-  
-  #Build to Model
-   
-  model.basevo2kg <- lmer(vo2.kg ~ period + (1 | id), data = baseline_vo2kg)
-  summary(model.basevo2kg)
- ci.base.vo2kg <- confint(model.basevo2kg, level = 0.95)
-  print(ci.base.vo2kg)
-  
-##Calculate the ICC from the function above.
-  
-icc_fun(model.basevo2kg)
+## combining plots
 
-## Calculate confident intervall from the ICC
 
-bo.basevo2kg <- bootMer(model.basevo2kg, icc_fun, nsim = 1000)
+comb.plot <- plot_grid(vo2.plot, vo2kg.plot, wmax.plot, wmaxkg.plot, w15.plot, w15kg.plot, #GE40.plot, rel.vo2.plot, 
+                       labels = "AUTO",
+                       nrow = 3,
+                       rel_heights = c(2, 2, 2) -3, align = "v")
+adjusted.comb.plot <- ggdraw(comb.plot) +
+theme(plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+      text = element_text(size = 20))
+                             
+print(adjusted.comb.plot)
 
-quantile(bo.basevo2kg$t, c(0.025, 0.975))
+ggsave(filename = "combined_plot_change-2.jpeg", 
+       plot = adjusted.comb.plot, 
+       width = 160, height = 280, units = "mm")
 ```
 
-##wmax Baseline
 
+
+### Print results
 ```{r}
-baseline_wmax <- final.data %>% 
-select(id, period, timepoint, test, watt) %>% 
-  filter(test == "max", 
-         timepoint == "pre",  
-         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         !period %in% (3)) %>%
-  pivot_wider(names_from = timepoint, values_from = watt) %>% 
-  rename(watt = pre) %>% 
-  print()
-  
-  #Build to Model
-   
-  model.basewmax <- lmer(watt ~ period + (1 | id), data = baseline_wmax)
-  summary(model.basewmax)
-  
-##Calculate the ICC from the function above.
-  
-icc_fun(model.basewmax)
+print(icc_df.vo2)
+print(icc_df.wmax)
+print(icc_df.w15)
+print(icc_df.rel.vo2)
+print(icc_df.GE40)
+print(icc_df.vo2kg)
+print(icc_df.wmaxkg)
+print(icc_df.w15kg)
 
-## Calculate confident intervall from the ICC
-
-bo.basewmax <- bootMer(model.basewmax, icc_fun, nsim = 1000)
-
-quantile(bo.basewmax$t, c(0.025, 0.975))
+print(r.vo2_df)
+print(r.wmax_df)
+print(r.w15_df)
+print(r.wmaxkg_df)
+print(r.GE40_df)
+print(r.rel.vo2_df)
+print(r.w15kg_df)
+print(r.vo2kg_df)
 ```
 
 
 
-
-
-
-``
-
-
-
-
-
-## Compare session-data between period 1 and 2
-```{r}
-
-session <- session.data %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         type == c("4x5", "4x8", "6x6")) %>%
-  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
-  summarise(
-   ftp_1_mean = round(mean(ftp_1, na.rm = TRUE)),
-  hr_1_mean = round(mean(hr_1, na.rm = TRUE)),
-  watt_1_mean = round(mean(watt_1, na.rm = TRUE)),
-  rpe_1_mean = round(mean(rpe_1, na.rm = TRUE)),
-  ftp_2_mean = round(mean(ftp_2, na.rm = TRUE)),
-  hr_2_mean = round(mean(hr_2, na.rm = TRUE)),
-  watt_2_mean = round(mean(watt_2, na.rm = TRUE)),
-  rpe_2_mean = round(mean(rpe_2, na.rm = TRUE))) %>%
-  pivot_longer(
-    cols = starts_with("ftp_1_"):starts_with("rpe_2_"),
-    names_to = c(".value", "period"),
-    names_sep = "_") %>%
-pivot_longer(names_to = "variables", values_to = "values", cols = ftp:rpe) %>% 
-  pivot_wider(names_from = period, values_from = values, names_prefix = "period_") %>% 
-  print()
-
-
-session.type <- session.data %>% 
-  select(id, period, session.n, type) %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  group_by(period, type) %>%
-  summarize(count = n(), .groups = 'drop') %>%
-  filter(!is.na(type)) %>% 
-  pivot_wider(names_from = period, values_from = count, names_prefix = "period_") %>% 
- mutate(
-    mean_n_p1 = round(period_1 / 42),
-    mean_n_p2 = round(period_2 / 42)) %>% 
-  select(type, mean_n_p1, mean_n_p2) %>% 
-  print()
-
-
-```
-
-
-
-## Compare session-data between period 1 and 2
-```{r}
-session <- session.data %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         type == c("4x5", "4x8", "6x6")) %>%
-  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
-  summarise(
-   ftp_1_mean = round(mean(ftp_1, na.rm = TRUE)),
-  hr_1_mean = round(mean(hr_1, na.rm = TRUE)),
-  watt_1_mean = round(mean(watt_1, na.rm = TRUE)),
-  rpe_1_mean = round(mean(rpe_1, na.rm = TRUE)),
-  ftp_2_mean = round(mean(ftp_2, na.rm = TRUE)),
-  hr_2_mean = round(mean(hr_2, na.rm = TRUE)),
-  watt_2_mean = round(mean(watt_2, na.rm = TRUE)),
-  rpe_2_mean = round(mean(rpe_2, na.rm = TRUE))) %>%
-  pivot_longer(
-    cols = starts_with("ftp_1_"):starts_with("rpe_2_"),
-    names_to = c(".value", "period"),
-    names_sep = "_") %>%
-pivot_longer(names_to = "variables", values_to = "values", cols = ftp:rpe) %>% 
-  pivot_wider(names_from = period, values_from = values, names_prefix = "period_") %>% 
-  print()
-
-
-
-```
-
-##mean sessions trained per workout. 
-
-```{r}
-session.type <- session.data %>% 
-  select(id, period, session.n, type) %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
-  group_by(period, type) %>%
-  summarize(count = n(), .groups = 'drop') %>%
-  filter(!is.na(type)) %>% 
-  pivot_wider(names_from = period, values_from = count, names_prefix = "period_") %>% 
- mutate(
-    mean_n_p1 = round(period_1 / 42),
-    mean_n_p2 = round(period_2 / 42)) %>% 
-  select(type, mean_n_p1, mean_n_p2) %>% 
-  print()
-```
-
-
-
-
-
-### gjennomsnittswatt på alle øktene
-```{r}
-session.test.watt <- session.data %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         type == c("4x5", "4x8", "6x6")) %>%
-  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
-  group_by(id) %>% 
-  summarize(mean_watt_1 = mean(watt_1, na.rm=T),
-            mean_watt_2 = mean(watt_2, na.rm=T)) %>%
-  pivot_longer(cols = starts_with("mean_watt"),
-               names_to = "test",
-               values_to = "watt") %>%
-  mutate(period = if_else(test == "mean_watt_1", "1", "2")) %>%
-  select(id, period, test, watt) %>% 
-  print()
-
-##different models 
-
-  model.sess.watt <- lmer(watt ~ period + (1 | id), data = session.test.watt)
-  summary(model.sess.watt) 
-    
-  confint(model.sess.watt)
-  
-  icc_fun(model.sess.watt)
-
-## Calculate confident intervall from the ICC
-
-bo.sess.watt <- bootMer(model.sess.watt, icc_fun, nsim = 1000)
-
-quantile(bo.sess.watt$t, c(0.025, 0.975))
-
-```
-
-## Mean HR on all sessions
-```{r}
-session.test.hr <- session.data %>% 
-  filter(!id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
-         type == c("4x5", "4x8", "6x6")) %>%
-  pivot_wider(names_from = period, values_from = ftp:rpe) %>% 
-  group_by(id) %>% 
-  summarize(mean_hr_1 = mean(hr_1, na.rm=T),
-            mean_hr_2 = mean(hr_2, na.rm=T)) %>%
-  pivot_longer(cols = starts_with("mean_hr"),
-               names_to = "test",
-               values_to = "hr") %>%
-  mutate(period = if_else(test == "mean_hr_1", "1", "2")) %>%
-  select(id, period, test, hr) %>% 
-  print()
-  model.sess.hr <- lmer(hr ~ period + (1 | id), data = session.test.hr)
-  summary(model.sess.hr) 
-    
-  confint(model.sess.hr)
-  
-  icc_fun(model.sess.hr)
-
-## Calculate confident intervall from the ICC
-
-bo.sess.hr <- bootMer(model.sess.hr, icc_fun, nsim = 1000)
-
-quantile(bo.sess.hr$t, c(0.025, 0.975))
-```
 
 
