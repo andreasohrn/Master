@@ -1,0 +1,152 @@
+---
+title: "habitual"
+format: docx
+---
+
+
+```{r}
+#| echo: false
+#| warning: false
+library(repeatData)
+library(readxl)
+library(tidyverse)
+library(gt)
+library(lme4)
+library(irr)
+library(cowplot)
+library(psych)
+library(ggplot2)
+library(webshot2)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+# Creating physical_activity_data
+
+
+# Vectorize the function to convert hh:mm to decimal hours
+convert_to_decimal <- Vectorize(function(time_str) {
+  parts <- strsplit(time_str, ":")[[1]]
+  hours <- as.numeric(parts[1])
+  minutes <- as.numeric(parts[2])
+  decimal_time <- hours + minutes / 60
+  return(decimal_time)
+})
+
+# Load data
+fa_questionnaire_data <- read_excel("habitual-physic/fa_questionnaire_data.xlsx") %>% # OBS! This must be added to the RepeatData package instead. Use renaming there instead?
+  mutate(
+    period = ifelse(timepoint %in% c("per1_pre", "per1_post"), "1", 
+                    ifelse(timepoint %in% c("per2_pre", "per2_post"), "2", 
+                           ifelse(timepoint == "per2_after", "after", NA)))) %>% 
+
+
+  # Rename timepoints
+  mutate(
+    timepoint = ifelse(timepoint %in% c("per1_pre"), "pre_intervention", 
+                ifelse(timepoint %in% c("per1_post"), "period1",
+                ifelse(timepoint %in% c("per2_pre"), "detraining", 
+                ifelse(timepoint %in% c("per2_post"), "period2",
+                ifelse(timepoint == "per2_after", "post_intervention", NA)))))) %>%
+
+  
+  # Convert time variables from hh:mm to hours in decimal numbers, multiply by 60 to get minutes
+  # Multiply by the constant 1.2 kcal/min and the applicable METS from Jette, Sidney & Blumchen, 1990 to calculate the total energy expenditure used on the given activity per week 
+  mutate(walking = convert_to_decimal(walking)*60*1.2*5,
+         running = convert_to_decimal(running)*60*1.2*10,
+         cycling = convert_to_decimal(cycling)*60*1.2*7,
+         pole_walking = convert_to_decimal(pole_walking)*60*1.2*9, # No METS for this, but have used the one for moderate cross country skiing
+         cross_country_skiing = convert_to_decimal(cross_country_skiing)*60*1.2*9,
+         swimming = convert_to_decimal(swimming)*60*1.2*5,
+         skating = convert_to_decimal(skating)*60*1.2*7.5,
+         padeling = convert_to_decimal(padeling)*60*1.2*6.667,
+         strenght_training = convert_to_decimal(strenght_training)*60*1.2*5,
+         dancing = convert_to_decimal(dancing)*60*1.2*5,
+         golf = convert_to_decimal(golf)*60*1.2*3.7,
+         yoga = convert_to_decimal(yoga)*60*1.2*3.2,
+         tennis = convert_to_decimal(tennis)*60*1.2*6,
+         other_ball_games = convert_to_decimal(other_ball_games)*60*1.2*4,
+         water_gymnastics = convert_to_decimal(water_gymnastics)*60*1.2*6,
+         alpine_skiing = convert_to_decimal(alpine_skiing)*60*1.2*6,
+         combat_sports = convert_to_decimal(combat_sports)*60*1.2*9,
+         training_to_music = convert_to_decimal(training_to_music)*60*1.2*6,
+         squach = convert_to_decimal(squach)*60*1.2*5,
+         farm_work = convert_to_decimal(farm_work)*60*1.2*4.5,
+         craft_work = convert_to_decimal(craft_work)*60*1.2*5.25,
+         gardening = convert_to_decimal(gardening)*60*1.2*3.85,
+         household_chores = convert_to_decimal(household_chores)*60*1.2*2.9,
+         other_activities = convert_to_decimal(other_activities)*60*1.2*3) %>% # No METS for this, self selected
+  group_by(id, timepoint) %>% 
+  summarise(household.work = sum(across(c(farm_work:household_chores)), na.rm=TRUE),
+            recreational.activities = sum(across(c(walking:squach)), na.rm=TRUE),
+            total.activity = sum(across(c(walking:household_chores)), na.rm=TRUE)) %>% # Only physical activity, not household chores ect.
+  mutate(id = as.factor(id)) %>%
+  print()
+
+```
+
+
+```{r}
+#| echo: false
+#| warning: false
+habitual <- fa_questionnaire_data %>% 
+  filter(timepoint %in% c("period1", "period2"),
+    !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57)) %>% 
+  print()
+  
+  habitual_sum <- habitual %>% 
+  
+  pivot_wider(names_from = timepoint, 
+              values_from = c(household.work, recreational.activities, total.activity)) %>% 
+  drop_na() %>% 
+  group_by() %>% 
+  summarise(
+    hw.1 = paste(round(mean(household.work_period1, na.rm = TRUE), 0), 
+                 round(sd(household.work_period1, na.rm = TRUE), 0), sep = " ± "),
+    hw.2 = paste(round(mean(household.work_period2, na.rm = TRUE), 0), 
+                 round(sd(household.work_period2, na.rm = TRUE), 0), sep = " ± "),
+    ra.1 = paste(round(mean(recreational.activities_period1, na.rm = TRUE), 0), 
+                 round(sd(recreational.activities_period1, na.rm = TRUE), 0), sep = " ± "),
+    ra.2 = paste(round(mean(recreational.activities_period2, na.rm = TRUE), 0), 
+                 round(sd(recreational.activities_period2, na.rm = TRUE), 0), sep = " ± "),
+    ta.1 = paste(round(mean(total.activity_period1, na.rm = TRUE), 0), 
+                 round(sd(total.activity_period1, na.rm = TRUE), 0), sep = " ± "),
+    ta.2 = paste(round(mean(total.activity_period2, na.rm = TRUE), 0), 
+                 round(sd(total.activity_period2, na.rm = TRUE), 0), sep = " ± ")
+  ) %>% 
+    
+  pivot_longer(cols = everything(), 
+               names_to = c("measure", "period"), 
+               names_pattern = "(.*)\\.(\\d)") %>%
+   pivot_wider(names_from = period, values_from = value, names_prefix = "period_")
+
+
+gt(habitual_sum)
+  
+
+
+
+```
+
+
+
+```{r}
+icc_habitual <- habitual %>% 
+  select(id, timepoint, total.activity) %>% 
+   pivot_wider(names_from = timepoint, values_from = total.activity) %>% 
+  ungroup() %>% 
+  select(period1, period2) %>%
+  drop_na() %>% 
+  print()
+
+irr.icc.habitual <- icc(icc_habitual, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.habitual.b <- irr.icc.habitual$value
+lower_ci.habitual.b <- irr.icc.habitual$lbound
+upper_ci.habitual.b <- irr.icc.habitual$ubound
+
+```
+
+

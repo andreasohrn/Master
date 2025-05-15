@@ -1,0 +1,620 @@
+---
+title: "Baseline-test"
+format: html
+---
+
+
+```{r}
+##Loading necessary items
+
+#| echo: false
+#| warning: false
+library(repeatData)
+library(readxl)
+library(tidyverse)
+library(gt)
+library(lme4)
+library(irr)
+library(cowplot)
+library(psych)
+library(ggplot2)
+library(webshot2)
+
+data(final.data)
+data("cycling.data")
+data("hb.data")
+```
+
+
+
+
+##Baseline tests with LMM and ICC
+## Baseline W15min
+```{r}
+baseline_w15 <- final.data %>% 
+select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "per", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basew15 <- lmer(watt ~ period + (1 | id), data = baseline_w15)
+  summary(model.basew15)
+  confint(model.basew15)
+  
+##Calculate the ICC from the function above.
+  
+icc_baselinew15 <- baseline_w15 %>% 
+  select(id, period, watt) %>% 
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.w15.result.b <- icc(icc_baselinew15, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.w15.b <- irr.icc.w15.result.b$value
+lower_ci.w15.b <- irr.icc.w15.result.b$lbound
+upper_ci.w15.b <- irr.icc.w15.result.b$ubound
+
+cv.w15.b <- final.data %>% 
+  select(id, period, timepoint, test, watt) %>% 
+  filter(test == "per",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100)
+
+
+df.basew15.plot <- baseline_w15 %>%
+  filter(period %in% c(1, 2)) %>%
+  spread(key = period, value = watt) %>%
+  rename(Pre1 = '1', Pre2 = '2')
+
+# calculate pearsons r
+
+pearson_r.w15.b <- cor(df.basew15.plot$Pre1, df.basew15.plot$Pre2)
+
+  
+ b.w15.plot <- ggplot(df.basew15.plot, aes(x = Pre1, y = Pre2)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+    scale_x_continuous(limits = c(0, 300), breaks = seq(0, 300, by = 50), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 300), breaks = seq(0, 300, by = 50),  expand = c(0, 0)) +
+   coord_fixed(ratio = 1) +
+  labs(x = "Pre-1", y = "Pre-2", title = "") +
+     annotate("text", x = 5, y = 290, 
+             label = paste("ICC =", round(icc_value.w15.b, 2),
+                   "[", round(lower_ci.w15.b, 2), "-", round(upper_ci.w15.b, 2), "]"),
+               hjust = 0, vjust = 1) +
+   annotate("text", x = 5, y = 270,
+            label = paste("CV =", round(cv.w15.b$cv, 2)), hjust = 0, vjust = 1) +
+       theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+ b.w15.plot
+ 
+
+```
+
+### Baseline VO2(ml/min)
+```{r}
+baseline_vo2 <- final.data %>% 
+select(id, period, timepoint, test, vo2) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = vo2) %>% 
+  rename(vo2 = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basevo2 <- lmer(vo2 ~ period + (1 | id), data = baseline_vo2)
+  summary(model.basevo2)
+  confint(model.basevo2)
+  
+##Calculate the ICC from the function above.
+  
+icc_baselinevo2 <- baseline_vo2 %>% 
+  select(id, period, vo2) %>% 
+  pivot_wider(names_from = period, values_from = vo2, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.vo2.result.b <- icc(icc_baselinevo2, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.vo2.b <- irr.icc.vo2.result.b$value
+lower_ci.vo2.b <- irr.icc.vo2.result.b$lbound
+upper_ci.vo2.b <- irr.icc.vo2.result.b$ubound
+
+
+
+## CV
+
+cv.vo2.b <- final.data %>% 
+  select(id, period, timepoint, test, vo2) %>% 
+  filter(test == "max",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = vo2, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+## create a datafram to calculate pearsons r
+
+df.basevo2.plot <- baseline_vo2 %>%
+  filter(period %in% c(1, 2)) %>%
+  spread(key = period, value = vo2) %>%
+  rename(Pre1 = '1', Pre2 = '2')
+
+# calculate pearsons r
+
+pearson_r.vo2.b <- cor(df.basevo2.plot$Pre1, df.basevo2.plot$Pre2)
+
+
+  
+ b.vo2.plot <- ggplot(df.basevo2.plot, aes(x = Pre1, y = Pre2)) +
+ geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+    scale_x_continuous(limits = c(500, 5000), breaks = seq(500, 5000, by = 1000), expand = c(0, 0),
+                       labels = function(x) ifelse(x == 500, 0, x)) +
+  scale_y_continuous(limits = c(500, 5000), breaks = seq(500, 5000, by = 1000),  expand = c(0, 0),
+                      labels = function(x) ifelse(x == 500, 0, x)) +
+   coord_fixed(ratio = 1) +
+  labs(x = "Pre-1", y = "Pre-2", title = "") +
+     annotate("text", x = 700, y = 4900, 
+              label = paste("ICC =", round(icc_value.vo2.b, 2),
+                   "[", round(lower_ci.vo2.b, 2), "-", round(upper_ci.vo2.b, 2), "]"),
+               hjust = 0, vjust = 1) +
+    annotate("text", x = 700, y = 4600,
+           label = paste("CV =", round(cv.vo2.b$cv, 2)), hjust = 0, vjust = 1) +
+     theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+ 
+ b.vo2.plot
+ 
+```
+
+
+##wmax Baseline
+
+```{r}
+baseline_wmax <- final.data %>% 
+select(id, period, timepoint, test, watt) %>% 
+  filter(test == "max", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = timepoint, values_from = watt) %>% 
+  rename(watt = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basewmax <- lmer(watt ~ period + (1 | id), data = baseline_wmax)
+  summary(model.basewmax)
+  confint(model.basewmax)
+  
+##Calculate the ICC from the function above.
+  
+icc_baselinewmax <- baseline_wmax %>% 
+  select(id, period, watt) %>% 
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.wmax.result.b <- icc(icc_baselinewmax, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.wmax.b <- irr.icc.wmax.result.b$value
+lower_ci.wmax.b <- irr.icc.wmax.result.b$lbound
+upper_ci.wmax.b <- irr.icc.wmax.result.b$ubound
+
+
+
+##CV
+
+cv.wmax.b <- final.data %>% 
+  select(id, period, timepoint, test, watt) %>% 
+  filter(test == "max",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = watt, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+  print()
+
+
+
+
+df.basewmax.plot <- baseline_wmax %>%
+  filter(period %in% c(1, 2)) %>%
+  spread(key = period, value = watt) %>%
+  rename(Pre1 = '1', Pre2 = '2')
+
+# calculate pearsons r
+
+pearson_r.wmax.b <- cor.test(df.basewmax.plot$Pre1, df.basewmax.plot$Pre2)
+
+# Extract Pearson's r (correlation coefficient)
+r.wmax.b <- pearson_r.wmax.b$estimate
+
+# Extract confidence interval
+cir.basewmax <- pearson_r.wmax.b$conf.int
+
+  
+ b.wmax.plot <- ggplot(df.basewmax.plot, aes(x = Pre1, y = Pre2)) +
+ geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+    scale_x_continuous(limits = c(0, 400), breaks = seq(0, 400, by = 100), expand = c(0, 0),
+                       labels = function(x) ifelse(x == 50, 0, x)) +
+  scale_y_continuous(limits = c(0, 400), breaks = seq(0, 400, by = 100), expand = c(0, 0),
+                       labels = function(x) ifelse(x == 50, 0, x)) +
+   coord_fixed(ratio = 1) +
+  labs(x = "Pre-1", y = "Pre-2", title = "") +
+     annotate("text", x = 10, y = 390, 
+              label = paste("ICC =", round(icc_value.wmax.b, 2),
+                   "[", round(lower_ci.wmax.b, 2), "-", round(upper_ci.wmax.b, 2), "]"),
+               hjust = 0, vjust = 1) + 
+   annotate("text", x = 10, y = 360,
+            label = paste("CV =", round(cv.wmax.b$cv, 2)), hjust = 0, vjust = 1) +
+     theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+ 
+ b.wmax.plot
+```
+
+
+```{r}
+baseline_ge <- final.data %>% 
+select(id, period, timepoint, test, group, GE) %>% 
+  filter(test == "sub_40", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = GE) %>% 
+  rename(GE = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.basege <- lmer(GE ~ period + (1 | id), data = baseline_ge)
+  summary(model.basege)
+  confint(model.basege)
+  
+##Calculate the ICC from the function above.
+  
+icc_baselinege <- baseline_ge %>% 
+  select(id, period, GE) %>% 
+  pivot_wider(names_from = period, values_from = GE, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.ge.result.b <- icc(icc_baselinege, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.ge.b <- irr.icc.ge.result.b$value
+lower_ci.ge.b <- irr.icc.ge.result.b$lbound
+upper_ci.ge.b <- irr.icc.ge.result.b$ubound
+
+cv.ge.b <- final.data %>% 
+  select(id, period, timepoint, test, GE) %>% 
+  filter(test == "sub_40",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = GE, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+
+print()
+
+```
+```{r}
+baseline_uti <- final.data %>% 
+select(id, period, timepoint, test, group, rel.vo2) %>% 
+  filter(test == "per", 
+         timepoint == "pre",  
+         !id %in% c(6,11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3),
+         !group %in% ("control")) %>%
+  pivot_wider(names_from = timepoint, values_from = rel.vo2) %>% 
+  rename(rel.vo2 = pre) %>% 
+  print()
+  
+  #Build to Model
+   
+  model.baseuti <- lmer(rel.vo2 ~ period + (1 | id), data = baseline_uti)
+  summary(model.baseuti)
+  confint(model.baseuti)
+  
+##Calculate the ICC from the function above.
+  
+icc_baselineuti <- baseline_uti %>% 
+  select(id, period, rel.vo2) %>% 
+  pivot_wider(names_from = period, values_from = rel.vo2, names_prefix = "per_") %>% 
+  select(per_1, per_2) %>% 
+  print()
+
+irr.icc.uti.result.b <- icc(icc_baselineuti, model = "twoway", type = "agreement", unit = "single")
+
+# Extract ICC and confidence intervals
+icc_value.uti.b <- irr.icc.uti.result.b$value
+lower_ci.uti.b <- irr.icc.uti.result.b$lbound
+upper_ci.uti.b <- irr.icc.uti.result.b$ubound
+
+cv.uti.b <- final.data %>% 
+  select(id, period, timepoint, test, rel.vo2) %>% 
+  filter(test == "per",
+         timepoint == "pre",
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% (3)) %>%
+  pivot_wider(names_from = period, values_from = rel.vo2, names_prefix = "pre_") %>% 
+  mutate(diff = pre_2 - pre_1) %>% 
+  group_by() %>% 
+  summarise(mean_diff = mean(diff, na.rm = TRUE),
+             mean = mean(c(pre_1, pre_2),na.rm = T),
+             sd_diff = sd(diff, na.rm = TRUE),
+             te = sd_diff / sqrt(2),
+             cv = (te / mean) * 100) %>% 
+
+print()
+```
+
+
+
+```{r}
+baseline_vo2.3 <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, vo2) %>% 
+  filter(test == "max",  
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% c(3),
+         !group %in% c("control")) %>%
+  mutate(unique_timepoint = factor(case_when(
+    period == 1 & timepoint == "pre" ~ "pre-1",
+    period == 1 & timepoint == "post" ~ "post-1",
+    period == 2 & timepoint == "pre" ~ "pre-2",
+    period == 2 & timepoint == "post" ~ "post-2"
+  ), levels = c("pre-1", "post-1", 
+                "pre-2", "post-2")))
+
+baseline_vo2.3.mean <- baseline_vo2.3 %>% 
+  group_by(unique_timepoint) %>%
+  summarize(
+    mean_vo2 = mean(vo2, na.rm = TRUE),
+    se_vo2 = sd(vo2, na.rm = TRUE) / sqrt(n()), # Standard Error
+    ci_lower = mean_vo2 - qt(0.975, df = n() - 1) * se_vo2, # 95% CI Lower Bound
+    ci_upper = mean_vo2 + qt(0.975, df = n() - 1) * se_vo2 # 95% CI Upper Bound
+  ) %>% 
+  mutate(unique_timepoint = factor(unique_timepoint, 
+                                   levels = c("pre-1", "post-1", "pre-2", "post-2"))) %>% 
+  print()
+
+
+plot.b.vo2.3 <- ggplot() + 
+  # Add faded individual lines with yellow color
+  geom_line(data = baseline_vo2.3, aes(x = unique_timepoint, y = vo2, group = id), 
+            color = "black", alpha = 0.2) +
+  
+  # Add a bold mean line in blue
+  geom_line(data = baseline_vo2.3.mean, aes(x = unique_timepoint, y = mean_vo2, group = 1), 
+            color = "blue", size = 1, linetype = "solid") +
+   # Add error bars for 95% CI
+  geom_errorbar(data = baseline_vo2.3.mean, aes(x = unique_timepoint, ymin = ci_lower, ymax = ci_upper), 
+                width = 0.2, color = "black", size = 0.4) +
+  
+  # Add points for the means
+  geom_point(data = baseline_vo2.3.mean, aes(x = unique_timepoint, y = mean_vo2), 
+             color = "blue", size = 2) +
+  
+  # Labels and theme
+labs(y = expression(VO[2][max]~(mL%.%min^{-1})),
+       x = "Timepoints") +
+    scale_y_continuous(limits = c(1000, 5000),  breaks = seq(1000, 5000, 1000)) + 
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),        # Remove gridlines
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+  
+
+plot.b.vo2.3
+
+
+ggsave("plot.b.vo2.3.png", plot = plot.b.vo2.3, width = 6, height = 12, dpi = 300)
+
+```
+
+
+```{r}
+baseline_wmax.3 <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "max",  
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% c(3),
+         !group %in% c("control")) %>%
+  mutate(unique_timepoint = factor(case_when(
+    period == 1 & timepoint == "pre" ~ "pre-1",
+    period == 1 & timepoint == "post" ~ "post-1",
+    period == 2 & timepoint == "pre" ~ "pre-2",
+    period == 2 & timepoint == "post" ~ "post-2"
+  ), levels = c("pre-1", "post-1", 
+                "pre-2", "post-2"))) %>% 
+  print()
+
+baseline_wmax.3.mean <- baseline_wmax.3 %>% 
+  group_by(unique_timepoint) %>%
+  summarize(
+    mean_wmax = mean(watt, na.rm = TRUE),
+    se_wmax = sd(watt, na.rm = TRUE) / sqrt(n()), # Standard Error
+    ci_lower = mean_wmax - qt(0.975, df = n() - 1) * se_wmax, # 95% CI Lower Bound
+    ci_upper = mean_wmax + qt(0.975, df = n() - 1) * se_wmax  # 95% CI Upper Bound
+  ) %>% 
+  mutate(unique_timepoint = factor(unique_timepoint, 
+                                   levels = c("pre-1", "post-1", "pre-2", "post-2"))) %>% 
+  print()
+
+
+# Update the plot
+plot.b.wmax.3 <- ggplot() + 
+  # Add faded individual lines
+  geom_line(data = baseline_wmax.3, aes(x = unique_timepoint, y = watt, group = id), 
+            color = "black", alpha = 0.2) +
+  
+  # Add a bold mean line in blue
+  geom_line(data = baseline_wmax.3.mean, aes(x = unique_timepoint, y = mean_wmax, group = 1), 
+            color = "blue", size = 1, linetype = "solid") +
+  # Add error bars for 95% CI
+  geom_errorbar(data = baseline_wmax.3.mean, aes(x = unique_timepoint, ymin = ci_lower, ymax = ci_upper), 
+                width = 0.2, color = "black", size = 0.4) +
+  
+  # Add points for the means
+  geom_point(data = baseline_wmax.3.mean, aes(x = unique_timepoint, y = mean_wmax), 
+             color = "blue", size = 2) +
+  
+  # Update the labels
+ labs(y = expression(W[max]~"(W)"),
+     x = "Timepoints") +
+    scale_y_continuous(limits = c(100, 400),  breaks = seq(100, 400, 100)) + 
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),        # Remove gridlines
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+
+plot.b.wmax.3
+
+```
+
+```{r}
+baseline_w15.3 <- final.data %>% 
+  ungroup() %>% 
+  select(id, period, timepoint, test, group, watt) %>% 
+  filter(test == "per",  
+         !id %in% c(6, 11, 20, 21, 25, 35, 37, 52, 53, 54, 56, 57),
+         !period %in% c(3),
+         !group %in% c("control")) %>%
+  mutate(unique_timepoint = factor(case_when(
+    period == 1 & timepoint == "pre" ~ "pre-1",
+    period == 1 & timepoint == "post" ~ "post-1",
+    period == 2 & timepoint == "pre" ~ "pre-2",
+    period == 2 & timepoint == "post" ~ "post-2"
+  ), levels = c("pre-1", "post-1", 
+                "pre-2", "post-2"))) %>% 
+  print()
+
+baseline_w15.3.mean <- baseline_w15.3 %>% 
+  group_by(unique_timepoint) %>%
+  summarize(
+    mean_w15 = mean(watt, na.rm = TRUE),
+    se_w15 = sd(watt, na.rm = TRUE) / sqrt(n()), # Standard Error
+    ci_lower = mean_w15 - qt(0.975, df = n() - 1) * se_w15, # 95% CI Lower Bound
+    ci_upper = mean_w15 + qt(0.975, df = n() - 1) * se_w15  # 95% CI Upper Bound
+  ) %>% 
+  mutate(unique_timepoint = factor(unique_timepoint, 
+                                   levels = c("pre-1", "post-1", "pre-2", "post-2"))) %>% 
+  print()
+
+
+plot.b.w15.3 <- ggplot() + 
+  # Add faded individual lines
+  geom_line(data = baseline_w15.3, aes(x = unique_timepoint, y = watt, group = id), 
+            color = "black", alpha = 0.2) +
+  
+  # Add a bold mean line in blue
+  geom_line(data = baseline_w15.3.mean, aes(x = unique_timepoint, y = mean_w15, group = 1), 
+            color = "blue", size = 1, linetype = "solid") +
+  
+  # Add error bars for 95% CI
+  geom_errorbar(data = baseline_w15.3.mean, aes(x = unique_timepoint, ymin = ci_lower, ymax = ci_upper), 
+                width = 0.2, color = "black", size = 0.4) +
+  
+  # Add points for the means
+  geom_point(data = baseline_w15.3.mean, aes(x = unique_timepoint, y = mean_w15), 
+             color = "blue", size = 2) +
+  
+  # Update the labels
+ labs(y = expression(W[15][min]~"(W)"),
+     x = "Timepoints") +
+  scale_y_continuous(limits = c(50, 300),  breaks = seq(50, 300, 50)) + 
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),        # Remove gridlines
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(size = 12))
+
+
+
+plot.b.w15.3
+
+```
+
+
+
+```{r}
+combined.baseline.3 <- plot_grid(b.vo2.plot, b.wmax.plot, b.w15.plot, 
+                                 plot.b.vo2.3, plot.b.wmax.3, plot.b.w15.3, 
+                                 labels = "AUTO",
+                                 nrow = 2)
+                                 
+print(combined.baseline.3)
+
+#ggsave(filename = "timepoints.jpeg", 
+      # plot = combined.baseline.3, 
+      # width = 210, height = 210, units = "mm")
+```
+
+
+
+
+
